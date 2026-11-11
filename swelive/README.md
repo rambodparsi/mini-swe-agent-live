@@ -36,7 +36,8 @@ Every change to files outside `swelive/` is listed here.
 
 | File | Change | Why |
 |---|---|---|
-| – | none yet | |
+| `src/minisweagent/run/benchmarks/swebench.py` | Docker image name for instances without an `image_name`/`docker_image` field comes from the config key `run.image_name_template` (Jinja, instance fields available). The default is the original SWE-bench naming, so behaviour without the key is unchanged. | SWE-bench-Live images are named `starryzhang/sweb.eval.x86_64.<id>`, not `swebench/...`. |
+| `tests/run/test_swebench.py` | Two tests for the template (direct call and via config). | |
 
 ## Setup and running
 

@@ -97,6 +97,21 @@ def test_get_image_name_with_none_image_name():
     assert get_swebench_docker_image_name(instance) == expected
 
 
+def test_get_image_name_with_template():
+    template = "starryzhang/sweb.eval.x86_64.{{ instance_id | replace('__', '_1776_') }}"
+    instance = {"instance_id": "Amoffat__sh-744", "docker_image": None}
+    assert get_swebench_docker_image_name(instance, template) == "starryzhang/sweb.eval.x86_64.amoffat_1776_sh-744"
+    assert get_swebench_docker_image_name({**instance, "docker_image": "x/y:z"}, template) == "x/y:z"
+
+
+def test_get_image_name_template_from_config():
+    template = "registry.example/{{ repo }}:{{ instance_id | replace('__', '_1776_') }}"
+    config = {"environment": {"environment_class": "docker"}, "run": {"image_name_template": template}}
+    with patch("minisweagent.run.benchmarks.swebench.get_environment") as mock_get_env:
+        get_sb_environment(config, {"instance_id": "Foo__bar-1", "repo": "Foo/bar"})
+    assert mock_get_env.call_args[0][0]["image"] == "registry.example/foo/bar:foo_1776_bar-1"
+
+
 def test_get_image_name_with_complex_instance_id():
     """Test get_image_name with complex instance_id containing multiple double underscores"""
     instance = {"instance_id": "project__sub__module__version__1.2.3"}

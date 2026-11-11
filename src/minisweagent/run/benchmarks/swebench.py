@@ -65,21 +65,24 @@ app = typer.Typer(rich_markup_mode="rich", add_completion=False)
 _OUTPUT_FILE_LOCK = threading.Lock()
 
 
-def get_swebench_docker_image_name(instance: dict) -> str:
-    """Get the image name for a SWEBench instance."""
+# Docker doesn't allow double underscore, so we replace them with a magic token
+DEFAULT_IMAGE_NAME_TEMPLATE = "docker.io/swebench/sweb.eval.x86_64.{{ instance_id | replace('__', '_1776_') }}:latest"
+
+
+def get_swebench_docker_image_name(instance: dict, template: str = DEFAULT_IMAGE_NAME_TEMPLATE) -> str:
+    """Get the image name for a SWEBench instance. `template` is used if the instance doesn't name an image."""
     image_name = instance.get("image_name", None) or instance.get("docker_image", None)
     if image_name is None:
-        # Docker doesn't allow double underscore, so we replace them with a magic token
-        iid = instance["instance_id"]
-        id_docker_compatible = iid.replace("__", "_1776_")
-        image_name = f"docker.io/swebench/sweb.eval.x86_64.{id_docker_compatible}:latest".lower()
+        image_name = Template(template, undefined=StrictUndefined).render(**instance).lower()
     return image_name
 
 
 def get_sb_environment(config: dict, instance: dict) -> Environment:
     env_config = {**config.get("environment", {})}
     env_config["environment_class"] = env_config.get("environment_class", "docker")
-    image_name = get_swebench_docker_image_name(instance)
+    image_name = get_swebench_docker_image_name(
+        instance, config.get("run", {}).get("image_name_template", DEFAULT_IMAGE_NAME_TEMPLATE)
+    )
     if env_config["environment_class"] in ["docker", "swerex_modal"]:
         env_config["image"] = image_name
     elif env_config["environment_class"] in ["singularity", "contree"]:
