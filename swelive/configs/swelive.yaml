@@ -15,6 +15,7 @@ agent:
 
 environment:
   timeout: 120                 # seconds per command (some test suites are slow)
+  pull_timeout: 900            # seconds for starting the container, including the image download (images are large)
   run_args: ["--rm", "--network", "none"]   # no internet inside the agent's container (SWE-bench-Live protocol)
 
 run:
