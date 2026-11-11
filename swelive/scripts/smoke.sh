@@ -25,9 +25,12 @@ python swelive/scripts/check_dataset.py --dataset "$DATASET" --split "$SPLIT" -n
 mapfile -t IDS < "$OUT/instance_ids.txt"
 
 evaluate() {  # $1 = predictions file or "gold", $2 = output folder
+  # In gold mode the evaluator (afac77f) crashes after saving results, while writing an extra file
+  # (datetime not JSON serializable); the run counts as successful when results.json exists.
   (cd "$EVAL_DIR" && "$EVAL_PYTHON" -m evaluation.evaluation --dataset "$DATASET" --split "$SPLIT" \
     --platform linux --patch_dir "$1" --output_dir "$2" --workers "$WORKERS" --overwrite 0 \
-    --instance_ids "${IDS[@]}") 2>&1 | tee "$2.log"
+    --instance_ids "${IDS[@]}") 2>&1 | tee "$2.log" \
+    || [ -f "$2/results.json" ] || { echo "Evaluation failed; see $2.log"; exit 1; }
 }
 
 echo "== 2/4 Gold patches (checks the evaluator and images)"
