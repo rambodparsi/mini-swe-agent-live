@@ -1,0 +1,22 @@
+# SWE-bench-Live settings. Use on top of the built-in SWE-bench config:
+#   mini-extra swebench -c swebench.yaml -c swelive/configs/swelive.yaml ...
+# Only the keys below change; everything else (prompts, observation format) comes from swebench.yaml.
+
+model:
+  model_name: openai/gpt-5.1
+  model_kwargs:
+    drop_params: true          # drop parameters the model rejects instead of failing
+    reasoning_effort: medium   # GPT-5.x does not accept temperature; this is its main sampling setting
+    parallel_tool_calls: true
+
+agent:
+  step_limit: 100              # model calls per task
+  cost_limit: 2.0              # USD per task
+
+environment:
+  timeout: 120                 # seconds per command (some test suites are slow)
+  run_args: ["--rm", "--network", "none"]   # no internet inside the agent's container (SWE-bench-Live protocol)
+
+run:
+  # SWE-bench-Live images; used when a dataset row has no docker_image field
+  image_name_template: "starryzhang/sweb.eval.x86_64.{{ instance_id | replace('__', '_1776_') }}"
