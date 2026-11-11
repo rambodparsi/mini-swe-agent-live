@@ -1,3 +1,6 @@
+> [!NOTE]
+> **Fork for running mini-SWE-agent on SWE-bench-Live.** Fork-specific code, changes and credits: [`swelive/README.md`](swelive/README.md). The original README follows unchanged.
+
 <div align="center">
 <a href="https://mini-swe-agent.com/latest/"><img src="https://github.com/SWE-agent/mini-swe-agent/raw/main/docs/assets/mini-swe-agent-banner.svg" alt="mini-swe-agent banner" style="height: 7em"/></a>
 </div>
