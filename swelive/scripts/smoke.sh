@@ -11,7 +11,7 @@ DATASET=${DATASET:-SWE-bench-Live/SWE-bench-Live}
 SPLIT=${SPLIT:-lite}
 CONFIG=${CONFIG:-swelive/configs/swelive.yaml}
 EVAL_DIR=$(realpath "${EVAL_DIR:-../SWE-bench-Live}")
-EVAL_PYTHON=$(realpath "${EVAL_PYTHON:-$EVAL_DIR/.venv/bin/python}")
+EVAL_PYTHON=$(realpath -s "${EVAL_PYTHON:-$EVAL_DIR/.venv/bin/python}")  # -s: a venv's python is a symlink; resolving it leaves the venv
 OUT=$(realpath -m "${OUT:-runs/smoke_$(date +%Y%m%d_%H%M%S)}")
 
 [ -f "$EVAL_DIR/evaluation/evaluation.py" ] || { echo "SWE-bench-Live evaluator not found in $EVAL_DIR (set EVAL_DIR)"; exit 1; }
