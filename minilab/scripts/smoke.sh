@@ -2,14 +2,14 @@
 # Smoke test on the first N SWE-bench-Live lite instances:
 #   1. check dataset and images   2. evaluate gold patches   3. run the agent   4. evaluate the agent's patches
 # Run from the repository root. Settings can be overridden with environment variables, e.g.
-#   N=2 WORKERS=2 EVAL_DIR=../SWE-bench-Live EVAL_PYTHON=../SWE-bench-Live/.venv/bin/python bash swelive/scripts/smoke.sh
+#   N=2 WORKERS=2 EVAL_DIR=../SWE-bench-Live EVAL_PYTHON=../SWE-bench-Live/.venv/bin/python bash minilab/scripts/smoke.sh
 set -euo pipefail
 
 N=${N:-2}
 WORKERS=${WORKERS:-2}
 DATASET=${DATASET:-SWE-bench-Live/SWE-bench-Live}
 SPLIT=${SPLIT:-lite}
-CONFIG=${CONFIG:-swelive/configs/swelive.yaml}
+CONFIG=${CONFIG:-minilab/configs/swelive.yaml}
 EVAL_DIR=$(realpath "${EVAL_DIR:-../SWE-bench-Live}")
 EVAL_PYTHON=$(realpath -s "${EVAL_PYTHON:-$EVAL_DIR/.venv/bin/python}")  # -s: a venv's python is a symlink; resolving it leaves the venv
 OUT=$(realpath -m "${OUT:-runs/smoke_$(date +%Y%m%d_%H%M%S)}")
@@ -20,7 +20,7 @@ mkdir -p "$OUT"
 echo "Output: $OUT"
 
 echo "== 1/4 Dataset and images"
-python swelive/scripts/check_dataset.py --dataset "$DATASET" --split "$SPLIT" -n "$N" -c "$CONFIG" \
+python minilab/scripts/check_dataset.py --dataset "$DATASET" --split "$SPLIT" -n "$N" -c "$CONFIG" \
   --ids-out "$OUT/instance_ids.txt" --check-images
 mapfile -t IDS < "$OUT/instance_ids.txt"
 
