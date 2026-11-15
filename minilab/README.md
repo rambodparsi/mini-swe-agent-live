@@ -28,15 +28,58 @@ git fetch upstream && git merge upstream/main
 ```
 minilab/
 ├── README.md                 this file
+├── core/
+│   ├── context.py            shared context of one attempt: task, artifacts with provenance, events, costs
+│   ├── module.py             Module base class (the hooks), module loading, prompt sections (Add / Replace)
+│   ├── agent.py              LabAgent: mini's DefaultAgent + hooks; no modules = plain mini
+│   └── runner.py             batch runner: hook order, attempts / best-of-N, saving
+├── modules/                  research modules (Requirements, Planning, Testing, Review); registry in __init__.py
 ├── configs/swelive.yaml      SWE-bench-Live settings, used on top of the built-in swebench.yaml
-└── scripts/
-    ├── check_dataset.py      split size, fields, Docker image names; optionally checks that images exist
-    └── smoke.sh              dataset check → gold patches → agent → evaluation, on the first N instances
+├── scripts/
+│   ├── check_dataset.py      split size, fields, Docker image names; optionally checks that images exist
+│   └── smoke.sh              dataset check → gold patches → agent → evaluation, on the first N instances
+└── tests/                    equivalence with plain mini, submission handling, hooks, prompt sections, runner
 ```
 
-The research layer (runner, agent, shared context, hooks and modules) will be added to this folder.
-
 Run outputs (`runs/`, `logs/`) are not version-controlled.
+
+## Research layer
+
+The design is frozen as *mini-lab Architecture v1.0*. A module is a dataclass subclass of `Module`; its fields are its
+parameters and it overrides only the hooks it needs:
+
+| Hook | When | Returns |
+|---|---|---|
+| `before_run(ctx)` | before the container starts | nothing (writes artifacts with `ctx.put`) |
+| `setup_env(env, ctx)` | after the container starts | nothing |
+| `prompt_sections(ctx)` | when the prompt is built | `{name: Add(text) or Replace(text)}` for `## <name>` sections |
+| `before_query(agent, ctx)` | before each model call | messages to inject |
+| `on_execute(action, output, ctx)` | after each command | nothing (record only) |
+| `transform_output(action, output, ctx)` | after each command | changed output (raw and changed are both logged) |
+| `on_submit(patch, ctx)` | when the agent submits | `None` to accept, feedback text to reject (the run continues) |
+| `after_run(result, ctx)` | after one attempt | that attempt's result |
+| `select_attempt(attempts, ctx)` | once, after all `--attempts` | the chosen attempt |
+
+Modules run in the order Requirements → Planning → Testing → Review (their `category`). At most one module per
+experiment may implement `transform_output`, `on_submit` or `select_attempt`. An experiment is a config file that
+lists modules by registry name or import path, with their parameters:
+
+```yaml
+# runs on top of swebench.yaml + minilab/configs/swelive.yaml
+minilab:
+  modules:
+    my_package.my_module.MyModule: {quality: good}
+```
+
+```bash
+python -m minilab.core.runner -c swebench.yaml -c minilab/configs/swelive.yaml -c <experiment>.yaml \
+  --subset SWE-bench-Live/SWE-bench-Live --split lite --slice 0:10 -w 2 -o runs/<name>
+python -m pytest minilab/tests            # from the repository root
+```
+
+Without a `minilab` section the runner behaves like `mini-extra swebench` (same prompts, commands and patches).
+Each trajectory adds `info.minilab` (modules, artifacts, events, costs) and `info.wall_time_seconds`; unknown
+`agent` or `minilab` config keys are errors.
 
 ## Changes to the original code
 
