@@ -1,8 +1,12 @@
-# mini-swe-agent-live
+# mini-lab
 
-This fork runs [mini-SWE-agent](https://github.com/SWE-agent/mini-swe-agent) on
-[SWE-bench-Live](https://github.com/microsoft/SWE-bench-Live) (lite split) for a research project.
-Everything specific to this fork lives in this `swelive/` folder; the original code stays in `src/minisweagent/`.
+mini-lab is a research layer on top of [mini-SWE-agent](https://github.com/SWE-agent/mini-swe-agent).
+It adds software engineering practices (Requirements, Planning, Testing, Review) as optional modules and measures
+how each changes the agent's patches, cost and behaviour. Experiments run on
+[SWE-bench-Live](https://github.com/microsoft/SWE-bench-Live) (lite split).
+
+mini-SWE-agent itself stays unchanged in `src/minisweagent/` and is the baseline: with all modules off,
+mini-lab must behave exactly like it. Everything specific to this fork lives in this `minilab/` folder.
 
 ## Starting point
 
@@ -22,7 +26,7 @@ git fetch upstream && git merge upstream/main
 ## Layout
 
 ```
-swelive/
+minilab/
 ├── README.md                 this file
 ├── configs/swelive.yaml      SWE-bench-Live settings, used on top of the built-in swebench.yaml
 └── scripts/
@@ -30,11 +34,13 @@ swelive/
     └── smoke.sh              dataset check → gold patches → agent → evaluation, on the first N instances
 ```
 
+The research layer (runner, agent, shared context, hooks and modules) will be added to this folder.
+
 Run outputs (`runs/`, `logs/`) are not version-controlled.
 
 ## Changes to the original code
 
-Every change to files outside `swelive/` is listed here.
+Every change to files outside `minilab/` is listed here.
 
 | File | Change | Why |
 |---|---|---|
@@ -62,7 +68,7 @@ python3.12 -m venv ../SWE-bench-Live/.venv
 
 # 3. Check
 docker run --rm hello-world
-python swelive/scripts/check_dataset.py -n 2 --check-images
+python minilab/scripts/check_dataset.py -n 2 --check-images
 ```
 
 ## Running
@@ -70,7 +76,7 @@ python swelive/scripts/check_dataset.py -n 2 --check-images
 Smoke test on the first 2 instances (from the repository root, with `.venv` active):
 
 ```bash
-bash swelive/scripts/smoke.sh                   # N=2 WORKERS=2 by default; e.g. N=5 bash swelive/scripts/smoke.sh
+bash minilab/scripts/smoke.sh                   # N=2 WORKERS=2 by default; e.g. N=5 bash minilab/scripts/smoke.sh
 ```
 
 It writes `runs/smoke_<date>_<time>/`:
@@ -87,7 +93,7 @@ It writes `runs/smoke_<date>_<time>/`:
 The two steps separately:
 
 ```bash
-mini-extra swebench -c swebench.yaml -c swelive/configs/swelive.yaml \
+mini-extra swebench -c swebench.yaml -c minilab/configs/swelive.yaml \
   --subset SWE-bench-Live/SWE-bench-Live --split lite --slice 0:30 -w 4 -o runs/pilot
 
 cd ../SWE-bench-Live && .venv/bin/python -m evaluation.evaluation \

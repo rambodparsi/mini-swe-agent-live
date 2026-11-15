@@ -1,5 +1,5 @@
 # SWE-bench-Live settings. Use on top of the built-in SWE-bench config:
-#   mini-extra swebench -c swebench.yaml -c swelive/configs/swelive.yaml ...
+#   mini-extra swebench -c swebench.yaml -c minilab/configs/swelive.yaml ...
 # Only the keys below change; everything else (prompts, observation format) comes from swebench.yaml.
 
 model:
