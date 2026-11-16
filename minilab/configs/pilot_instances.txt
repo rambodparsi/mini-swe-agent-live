@@ -1,0 +1,10 @@
+arviz-devs__arviz-2413
+deepset-ai__haystack-8525
+delgan__loguru-1306
+encode__starlette-2812
+fonttools__fonttools-3682
+iterative__dvc-10711
+pybamm-team__pybamm-4644
+sissbruecker__linkding-999
+sphinx-doc__sphinx-13200
+sympy__sympy-27462
