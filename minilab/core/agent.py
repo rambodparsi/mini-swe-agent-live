@@ -20,8 +20,10 @@ class LabAgent(DefaultAgent):
         return call(self.modules, self.ctx, name, *args)
 
     def query(self) -> dict:
-        for messages in self.hook("before_query", self):
-            self.add_messages(*messages)
+        for module, messages in zip(self.modules, self.hook("before_query", self)):
+            for message in messages:
+                self.ctx.log(module.name, injected=message.get("content"))
+                self.add_messages({**message, "extra": {**message.get("extra", {}), "minilab": module.name}})
         return super().query()
 
     def execute_actions(self, message: dict) -> list[dict]:

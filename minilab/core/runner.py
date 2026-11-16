@@ -56,9 +56,15 @@ def run_attempt(instance: dict, config: dict, traj_path: Path, progress_manager:
     try:
         call(modules, ctx, "before_run")
         env = get_sb_environment(config, instance)
-        call(modules, ctx, "setup_env", env)
-        agent_config = dict(config.get("agent", {}))
-        if sections := {k: v for d in call(modules, ctx, "prompt_sections") for k, v in d.items()}:
+        for module, report in zip(modules, call(modules, ctx, "setup_env", env)):
+            if overrides(module, "setup_env"):
+                ctx.log(module.name, report=report)
+        agent_config, sections = dict(config.get("agent", {})), {}
+        for module, added in zip(modules, call(modules, ctx, "prompt_sections")):
+            if added:
+                ctx.log(module.name, sections={k: {"kind": type(v).__name__, "text": v.text} for k, v in added.items()})
+            sections |= added
+        if sections:
             agent_config["instance_template"] = apply_sections(agent_config["instance_template"], sections)
         agent = LabProgressAgent(
             get_model(config=dict(config.get("model", {}))),

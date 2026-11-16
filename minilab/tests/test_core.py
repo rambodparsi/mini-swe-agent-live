@@ -127,7 +127,16 @@ def test_hooks_order_provenance_and_logging(tmp_path):
     assert "HI" in agent.messages[4]["content"]
     seen = agent.ctx.artifacts["seen_step"]
     assert (seen.value, seen.version, seen.producer, seen.hook, seen.step) == (1, 2, "recorder", "before_query", 1)
-    on_execute, transform = agent.ctx.events
+    assert [(m["content"], m["extra"]["minilab"]) for m in agent.messages if "minilab" in m.get("extra", {})] == [
+        ("plan first", "recorder")
+    ]
+    injected, on_execute, transform = agent.ctx.events
+    assert (injected["producer"], injected["hook"], injected["step"], injected["injected"]) == (
+        "recorder",
+        "before_query",
+        0,
+        "plan first",
+    )
     assert (on_execute["hook"], on_execute["step"], on_execute["command"]) == ("on_execute", 1, "echo hi")
     assert transform["hook"] == "transform_output"
     assert (transform["raw_output"]["output"], transform["transformed_output"]["output"]) == ("hi\n", "HI\n")
