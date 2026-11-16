@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # Evaluate the patches of one or more run folders with the SWE-bench-Live harness; results go to <run>/eval/.
 #   bash minilab/scripts/evaluate.sh runs/b0/s1 runs/b0/s2
-# Settings: WORKERS, DATASET, SPLIT, EVAL_DIR (SWE-bench-Live checkout), EVAL_PYTHON.
+# Settings: WORKERS, DATASET (Hub name or local copy, e.g. data/SWE-bench-Live), SPLIT, EVAL_DIR (SWE-bench-Live checkout), EVAL_PYTHON.
 set -euo pipefail
 
 WORKERS=${WORKERS:-4}
 DATASET=${DATASET:-SWE-bench-Live/SWE-bench-Live}
+[ -e "$DATASET" ] && DATASET=$(realpath "$DATASET")  # local copy: the evaluator runs from EVAL_DIR
 SPLIT=${SPLIT:-lite}
 EVAL_DIR=$(realpath "${EVAL_DIR:-../SWE-bench-Live}")
 EVAL_PYTHON=$(realpath -s "${EVAL_PYTHON:-$EVAL_DIR/.venv/bin/python}")
