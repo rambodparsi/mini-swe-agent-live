@@ -1,6 +1,6 @@
 """Write the fixed pilot task list: a seeded sample of the split, spread over repositories (round-robin).
 
-python minilab/scripts/make_pilot.py -n 30            # writes minilab/configs/pilot_instances.txt
+python minilab/scripts/make_pilot.py --dataset data/SWE-bench-Live   # 10 tasks; writes minilab/configs/pilot_instances.txt
 """
 
 import random
@@ -26,7 +26,7 @@ def pick(instances: list[dict], n: int, seed: int) -> list[str]:
 
 @app.command()
 def main(
-    n: int = typer.Option(30, "-n", help="Number of tasks"),
+    n: int = typer.Option(10, "-n", help="Number of tasks (grow to 30 later with the same seed: the 10 stay included)"),
     seed: int = typer.Option(0, help="Sampling seed"),
     dataset: str = typer.Option("SWE-bench-Live/SWE-bench-Live", help="Hugging Face dataset name"),
     split: str = typer.Option("lite", help="Dataset split"),
