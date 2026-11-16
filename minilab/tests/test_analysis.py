@@ -131,3 +131,11 @@ def test_instance_selection_and_pilot_pick():
     assert chosen == pick(list(reversed(instances)), 6, seed=0) == sorted(chosen)
     assert sorted(i.split("__")[0] for i in chosen) == ["a", "a", "b", "b", "c", "c"]
     assert pick(instances, 6, seed=1) != chosen and len(pick(instances, 100, seed=0)) == 15
+
+
+@pytest.mark.parametrize("seed", [0, 1, 2])
+def test_small_pilot_is_inside_larger_pilot(seed):
+    instances = [{"instance_id": f"{repo}__{i}", "repo": repo} for repo in "abcdefg" for i in range(3 + ord(repo) % 5)]
+    small, large = pick(instances, 10, seed), pick(instances, 30, seed)
+    assert set(small) < set(large) and len(small) == 10 and len(large) == 30
+    assert len({i.split("__")[0] for i in small}) == 7

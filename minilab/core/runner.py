@@ -62,8 +62,20 @@ def git(*args: str) -> str:
     return subprocess.run(["git", *args], capture_output=True, text=True, cwd=Path(__file__).parent).stdout.strip()
 
 
-def provenance(config: dict) -> dict:
+def dataset_revision(dataset: str) -> str:
+    """Version of the dataset: the REVISION file of a local copy (scripts/download_dataset.py), else the Hub commit."""
+    if Path(dataset).exists():
+        return (Path(dataset) / "REVISION").read_text().strip() if (Path(dataset) / "REVISION").exists() else "unknown"
+    from huggingface_hub import HfApi
+
+    return HfApi().dataset_info(dataset).sha
+
+
+def provenance(config: dict, dataset: str = "", split: str = "") -> dict:
     return {
+        "dataset": dataset,
+        "split": split,
+        "dataset_revision": dataset_revision(dataset) if dataset else "",
         "git_commit": git("rev-parse", "HEAD"),
         "git_dirty": bool(git("status", "--porcelain")),
         "mini_version": minisweagent.__version__,
@@ -80,9 +92,9 @@ def select_instances(instances: list[dict], ids: list[str]) -> list[dict]:
     return [by_id[i] for i in ids]
 
 
-def write_run_files(output_path: Path, config: dict) -> None:
+def write_run_files(output_path: Path, config: dict, dataset: str = "", split: str = "") -> None:
     (output_path / "config.json").write_text(json.dumps(config, indent=2))
-    (output_path / "provenance.json").write_text(json.dumps(provenance(config), indent=2))
+    (output_path / "provenance.json").write_text(json.dumps(provenance(config, dataset, split), indent=2))
 
 
 def run_attempt(instance: dict, config: dict, traj_path: Path, progress_manager: RunBatchProgressManager) -> dict:
@@ -190,7 +202,7 @@ def main(
     config = recursive_merge(*[get_config_from_spec(spec) for spec in config_spec], {"model": {"model_name": model or UNSET}})
     check_config(config)
     load_modules(config.get("minilab", {}).get("modules", {}))
-    write_run_files(output_path, config)
+    write_run_files(output_path, config, DATASET_MAPPING.get(subset, subset), split)
 
     from datasets import load_dataset
 

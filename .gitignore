@@ -189,4 +189,5 @@ pyrightconfig.json
 
 # minilab run outputs
 /runs/
+/data/
 /logs/
