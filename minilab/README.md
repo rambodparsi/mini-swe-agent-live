@@ -91,10 +91,25 @@ mini's bash tool, with its cost and tokens recorded under the module's name and 
 
 ```bash
 python -m minilab.core.runner -c swebench.yaml -c minilab/configs/swelive.yaml -c <experiment>.yaml \
-  --subset SWE-bench-Live/SWE-bench-Live --split lite --slice 0:10 -w 2 -o runs/<name>
-python -m minilab.core.check runs/<name> --subset SWE-bench-Live/SWE-bench-Live --split lite
+  --subset data/SWE-bench-Live --split lite --instances minilab/configs/pilot_instances.txt -w 2
+python -m minilab.core.check runs/<model>/<experiment>__<id>/s1 --subset data/SWE-bench-Live --split lite
 python -m pytest minilab/tests            # from the repository root
 ```
+
+### Where runs go
+
+Without `-o`, every run gets a new folder `runs/<model>/<experiment>__<id>/s<k>`, so runs never overwrite each other:
+
+- `<model>`: the last part of `model.model_name` (e.g. `gpt-5.1`), from the merged config;
+- `<experiment>`: the name of the config file from `configs/experiments/` (`custom` if there is none);
+- `<id>`: a short fingerprint of the whole merged config and the task list. Change anything (model, its settings,
+  limits, modules or their parameters, tasks) and the run goes to a new condition folder; the same setup again goes
+  to the same condition folder as the next seed (`s1`, `s2`, ...).
+
+`runs/index.jsonl` gets one line per run (folder, model, experiment, modules, tasks, time, git commit). Use `-o <folder>`
+only to resume an interrupted run; this is refused if that folder was run with a different config. Prefer a small
+config file added last (e.g. `-c minilab/configs/models/<name>.yaml`) over editing `swelive.yaml`, so the shared base
+stays the same for every run.
 
 `check` fails a run if `config.json` or `provenance.json` (git commit, mini version, Python, modules) is missing, if a
 trajectory's prompt is not the config prompt plus its logged sections, if events or injected messages come from a
@@ -118,12 +133,12 @@ Every condition is measured the same way. A condition is a folder of repeated ru
 ```bash
 python minilab/scripts/download_dataset.py        # once; commit minilab/configs/dataset_revision.txt
 python minilab/scripts/make_pilot.py --dataset data/SWE-bench-Live   # 10 tasks; commit pilot_instances.txt
-for s in 1 2 3; do
+for s in 1 2 3; do                                 # three seeds → runs/gpt-5.1/b0__<id>/s1, s2, s3
   python -m minilab.core.runner -c swebench.yaml -c minilab/configs/swelive.yaml -c minilab/configs/experiments/b0.yaml \
-    --subset data/SWE-bench-Live --split lite --instances minilab/configs/pilot_instances.txt -w 4 -o runs/b0/s$s
+    --subset data/SWE-bench-Live --split lite --instances minilab/configs/pilot_instances.txt -w 4
 done
-DATASET=data/SWE-bench-Live bash minilab/scripts/evaluate.sh runs/b0/s*   # → runs/b0/s*/eval/results.json
-python -m minilab.analysis.report runs/b0 runs/p1 --baseline b0 -o runs/analysis
+DATASET=data/SWE-bench-Live bash minilab/scripts/evaluate.sh runs/gpt-5.1/b0__*/s*   # → <run>/eval/results.json
+python -m minilab.analysis.report runs/gpt-5.1/b0__<id> runs/gpt-5.1/p1__<id> --baseline b0 -o runs/analysis
 ```
 
 All runs use the local copy, so tasks and tests cannot change between conditions; `provenance.json` records the

@@ -139,3 +139,13 @@ def test_small_pilot_is_inside_larger_pilot(seed):
     small, large = pick(instances, 10, seed), pick(instances, 30, seed)
     assert set(small) < set(large) and len(small) == 10 and len(large) == 30
     assert len({i.split("__")[0] for i in small}) == 7
+
+
+@pytest.mark.parametrize(
+    ("names", "exit_code"), [(["b0__a1b2c3", "lab__d4e5f6"], 0), (["b0__a1b2c3", "b0__ffffff"], 2), (["lab", "p1"], 2)]
+)
+def test_report_baseline_by_short_name(tmp_path, names, exit_code):
+    for name in names:
+        make_run(tmp_path, tmp_path / "runs" / name / "s1", name.startswith("lab"), ["repo__x-1"])
+    args = [str(tmp_path / "runs" / n) for n in names] + ["--baseline", "b0", "-o", str(tmp_path / "out")]
+    assert CliRunner().invoke(app, args).exit_code == exit_code

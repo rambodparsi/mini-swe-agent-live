@@ -6,6 +6,7 @@ Usage (from the repository root):
 """
 
 import concurrent.futures
+import hashlib
 import json
 import platform
 import subprocess
@@ -37,6 +38,7 @@ from minisweagent.utils.log import add_file_handler, logger
 from minisweagent.utils.serialize import UNSET, recursive_merge
 
 app = typer.Typer(rich_markup_mode="rich", add_completion=False)
+RUNS = Path("runs")
 
 
 class LabProgressAgent(LabAgent, ProgressTrackingAgent):
@@ -90,6 +92,47 @@ def select_instances(instances: list[dict], ids: list[str]) -> list[dict]:
     if missing := [i for i in ids if i not in by_id]:
         raise ValueError(f"Instances not in the dataset: {missing}")
     return [by_id[i] for i in ids]
+
+
+def fingerprint(*parts) -> str:
+    """Short id of everything that defines a condition: the merged config and the task selection."""
+    return hashlib.sha256(json.dumps(parts, sort_keys=True, default=str).encode()).hexdigest()[:6]
+
+
+def experiment_name(config_spec: list[str]) -> str:
+    """Name of the last config file from configs/experiments/, else "custom"."""
+    return next((Path(s).stem for s in reversed(config_spec) if Path(s).parent.name == "experiments"), "custom")
+
+
+def next_run_dir(root: Path, config: dict, experiment: str, tasks: dict) -> Path:
+    """runs/<model>/<experiment>__<fingerprint>/s<k>, with k one past the existing seeds: never an existing folder."""
+    model = str(config.get("model", {}).get("model_name") or "model").split("/")[-1]
+    condition = root / model / f"{experiment}__{fingerprint(config, tasks)}"
+    seeds = [int(p.name[1:]) for p in condition.glob("s*") if p.name[1:].isdigit()]
+    return condition / f"s{max(seeds, default=0) + 1}"
+
+
+def check_resume(output_path: Path, config: dict) -> None:
+    """Resuming a run folder is only allowed with the same config, so one folder never mixes two setups."""
+    saved = output_path / "config.json"
+    if saved.exists() and json.loads(saved.read_text()) != json.loads(json.dumps(config)):
+        raise ValueError(f"{output_path} was run with a different config; leave out -o to get a new folder")
+
+
+def log_run(root: Path, output_path: Path, config: dict, experiment: str, n_tasks: int) -> None:
+    """One line per run in runs/index.jsonl, to see what each folder is."""
+    root.mkdir(parents=True, exist_ok=True)
+    entry = {
+        "output": str(output_path),
+        "model": config.get("model", {}).get("model_name"),
+        "experiment": experiment,
+        "modules": sorted(config.get("minilab", {}).get("modules", {})),
+        "tasks": n_tasks,
+        "started": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "git_commit": git("rev-parse", "--short", "HEAD"),
+    }
+    with (root / "index.jsonl").open("a") as f:
+        f.write(json.dumps(entry) + "\n")
 
 
 def write_run_files(output_path: Path, config: dict, dataset: str = "", split: str = "") -> None:
@@ -188,7 +231,7 @@ def main(
     filter_spec: str = typer.Option("", "--filter", help="Filter instance IDs by regex"),
     instances_file: Path | None = typer.Option(None, "--instances", help="File with instance IDs, one per line (e.g. minilab/configs/pilot_instances.txt)"),
     shuffle: bool = typer.Option(False, "--shuffle", help="Shuffle instances"),
-    output: str = typer.Option("", "-o", "--output", help="Output directory"),
+    output: str = typer.Option("", "-o", "--output", help="Output directory (default: a new runs/<model>/<experiment>__<id>/s<k>); give an existing one to resume it"),
     workers: int = typer.Option(1, "-w", "--workers", help="Number of worker threads"),
     attempts: int = typer.Option(1, "--attempts", help="Independent attempts per instance (best-of-N)"),
     model: str | None = typer.Option(None, "-m", "--model", help="Model to use"),
@@ -196,21 +239,26 @@ def main(
     config_spec: list[str] = typer.Option([str(DEFAULT_CONFIG_FILE)], "-c", "--config", help="Config files or key=value pairs, merged in order"),
 ) -> None:
     # fmt: on
-    output_path = Path(output)
-    output_path.mkdir(parents=True, exist_ok=True)
-    add_file_handler(output_path / "minilab.log")
     config = recursive_merge(*[get_config_from_spec(spec) for spec in config_spec], {"model": {"model_name": model or UNSET}})
     check_config(config)
     load_modules(config.get("minilab", {}).get("modules", {}))
-    write_run_files(output_path, config, DATASET_MAPPING.get(subset, subset), split)
 
     from datasets import load_dataset
 
+    dataset = DATASET_MAPPING.get(subset, subset)
     instances = filter_instances(
-        list(load_dataset(DATASET_MAPPING.get(subset, subset), split=split)), filter_spec=filter_spec, slice_spec=slice_spec, shuffle=shuffle
+        list(load_dataset(dataset, split=split)), filter_spec=filter_spec, slice_spec=slice_spec, shuffle=shuffle
     )
     if instances_file:
         instances = select_instances(instances, instances_file.read_text().split())
+    tasks = {"dataset": dataset, "split": split, "instances": [i["instance_id"] for i in instances]}
+    output_path = Path(output) if output else next_run_dir(RUNS, config, experiment_name(config_spec), tasks)
+    check_resume(output_path, config)
+    output_path.mkdir(parents=True, exist_ok=True)
+    add_file_handler(output_path / "minilab.log")
+    write_run_files(output_path, config, dataset, split)
+    log_run(RUNS, output_path, config, experiment_name(config_spec), len(instances))
+    logger.info(f"Output: {output_path}")
     if not redo_existing and (output_path / "preds.json").exists():
         done = json.loads((output_path / "preds.json").read_text())
         instances = [i for i in instances if i["instance_id"] not in done]
