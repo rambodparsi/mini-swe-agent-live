@@ -42,9 +42,12 @@ minilab/
 ├── configs/
 │   ├── swelive.yaml          SWE-bench-Live settings, used on top of the built-in swebench.yaml
 │   ├── experiments/          one config per experiment (b0.yaml = plain mini baseline)
+│   ├── dataset_revision.txt  dataset version of the local copy (written by scripts/download_dataset.py)
+│   ├── explore_instances.txt 10 tasks for first tries; always inside the pilot list
 │   └── pilot_instances.txt   fixed pilot task list (written by scripts/make_pilot.py)
 ├── scripts/
 │   ├── check_dataset.py      split size, fields, Docker image names; optionally checks that images exist
+│   ├── download_dataset.py   fixed local copy of the dataset (data/, not version-controlled)
 │   ├── make_pilot.py         seeded pilot sample, spread over repositories
 │   ├── evaluate.sh           SWE-bench-Live evaluation of run folders → <run>/eval/
 │   └── smoke.sh              dataset check → gold patches → agent → evaluation, on the first N instances
@@ -114,14 +117,21 @@ submissions and changed command outputs. Everything else in a trajectory comes f
 Every condition is measured the same way. A condition is a folder of repeated runs ("seeds") on the same task list:
 
 ```bash
-python minilab/scripts/make_pilot.py -n 30        # once; commit minilab/configs/pilot_instances.txt
+python minilab/scripts/download_dataset.py        # once; commit minilab/configs/dataset_revision.txt
+python minilab/scripts/make_pilot.py --dataset data/SWE-bench-Live -n 30
+python minilab/scripts/make_pilot.py --dataset data/SWE-bench-Live -n 10 -o minilab/configs/explore_instances.txt
 for s in 1 2 3; do
   python -m minilab.core.runner -c swebench.yaml -c minilab/configs/swelive.yaml -c minilab/configs/experiments/b0.yaml \
-    --subset SWE-bench-Live/SWE-bench-Live --split lite --instances minilab/configs/pilot_instances.txt -w 4 -o runs/b0/s$s
+    --subset data/SWE-bench-Live --split lite --instances minilab/configs/pilot_instances.txt -w 4 -o runs/b0/s$s
 done
-bash minilab/scripts/evaluate.sh runs/b0/s*       # → runs/b0/s*/eval/results.json
+DATASET=data/SWE-bench-Live bash minilab/scripts/evaluate.sh runs/b0/s*   # → runs/b0/s*/eval/results.json
 python -m minilab.analysis.report runs/b0 runs/p1 --baseline b0 -o runs/analysis
 ```
+
+All runs use the local copy, so tasks and tests cannot change between conditions; `provenance.json` records the
+dataset, split and version. With the same seed, the 10 exploration tasks are the first 10 of the pilot's sampling
+order, so they are always inside the 30 (and spread over repositories). Results on tasks used for exploration are
+optimistic; report the pilot both on all 30 and on the 20 not used for exploration.
 
 `report` writes `tasks.csv` (one row per condition, seed and task) and `report.json` (per-condition means and
 comparisons), and prints a summary. Measures per task:

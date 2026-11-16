@@ -118,7 +118,9 @@ def test_check_run_finds_problems(tmp_path, tamper, instance, problem):
     config, out = lab_config(tmp_path, srs), tmp_path / "out"
     instance = {"instance_id": "repo__x-1", "problem_statement": "Fix it", **instance}
     process_instance(instance, out, config, RunBatchProgressManager(1, tmp_path / "exit.yaml"))
-    write_run_files(out, config)
+    (tmp_path / "data").mkdir()
+    (tmp_path / "data" / "REVISION").write_text("abc123\n")
+    write_run_files(out, config, str(tmp_path / "data"), "lite")
     traj_path = out / "repo__x-1" / "repo__x-1.traj.json"
     if tamper:
         traj = json.loads(traj_path.read_text())
@@ -126,6 +128,11 @@ def test_check_run_finds_problems(tmp_path, tamper, instance, problem):
         traj_path.write_text(json.dumps(traj))
     problems = check_run(out, [instance]).get(str(traj_path), [])
     assert (problems[0].startswith(problem) if problem else problems) == (True if problem else [])
-    assert json.loads((out / "provenance.json").read_text())["modules"] == ["minilab.tests.test_runner.Lab"]
+    saved = json.loads((out / "provenance.json").read_text())
+    assert (saved["modules"], saved["dataset_revision"], saved["split"]) == (
+        ["minilab.tests.test_runner.Lab"],
+        "abc123",
+        "lite",
+    )
     (out / "provenance.json").unlink()
     assert check_run(out) == {str(out): ["missing provenance.json"]}
