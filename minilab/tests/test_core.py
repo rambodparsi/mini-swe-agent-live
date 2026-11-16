@@ -5,6 +5,7 @@ import pytest
 import yaml
 
 from minilab import Add, LabAgent, Module, Replace, apply_sections, check_modules, load_modules
+from minilab.core.module import section_values
 from minilab.core.runner import check_config
 from minisweagent.agents.default import DefaultAgent
 from minisweagent.config import builtin_config_dir
@@ -143,19 +144,45 @@ def test_hooks_order_provenance_and_logging(tmp_path):
     assert agent.serialize()["info"]["minilab"]["modules"] == [{"name": "recorder"}]
 
 
+def render(template: str, sections: dict) -> str:
+    agent = DefaultAgent(
+        DeterministicModel(outputs=[]), LocalEnvironment(), system_template="s", instance_template=template
+    )
+    agent.extra_template_vars |= {"task": "fix it", "minilab_sections": section_values(sections)}
+    return agent._render_template(apply_sections(template, sections))
+
+
 def test_prompt_sections_change_only_named_sections():
     template = SWEBENCH["agent"]["instance_template"]
     assert apply_sections(template, {}) == template
-    new = apply_sections(
-        template, {"Submission": Replace("Submit, then wait for review."), "Requirements": Add("Follow the SRS.")}
-    )
-    assert new.startswith(template.split("## Submission")[0])
-    assert new.endswith(
-        "## Submission\nSubmit, then wait for review.\n\n## Requirements\nFollow the SRS.\n\n</instructions>\n"
-    )
+    jinja = "Keep {{ x }}, {% endraw %} and {# as text."
+    sections = {
+        "Submission": Replace("Submit, then wait for review."),
+        "Requirements": Add(jinja),
+        "Plan": Add("Plan first.", before="Recommended Workflow"),
+    }
+    new = apply_sections(template, sections)
+    assert new.startswith(template.split("## Recommended Workflow")[0])
+    assert new.count("minilab_sections") == 3
     assert "You CANNOT continue working" in template and "You CANNOT continue working" not in new
-    with pytest.raises(KeyError):
-        apply_sections(template, {"No such section": Replace("x")})
+    rendered = render(template, sections)
+    assert "## Plan\nPlan first.\n\n## Recommended Workflow\n" in rendered
+    assert rendered.endswith(
+        f"## Submission\nSubmit, then wait for review.\n\n## Requirements\n{jinja}\n\n</instructions>"
+    )
+
+
+@pytest.mark.parametrize(
+    ("sections", "error"),
+    [
+        ({"No such section": Replace("x")}, KeyError),
+        ({"Plan": Add("x", before="No such section")}, KeyError),
+        ({'Bad"]}}': Add("x")}, ValueError),
+    ],
+)
+def test_prompt_sections_errors(sections, error):
+    with pytest.raises(error):
+        apply_sections(SWEBENCH["agent"]["instance_template"], sections)
 
 
 def test_module_loading_and_checks():

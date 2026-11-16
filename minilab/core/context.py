@@ -20,6 +20,8 @@ class Context:
     artifacts: dict[str, Artifact] = field(default_factory=dict)
     events: list[dict] = field(default_factory=list)
     costs: dict[str, float] = field(default_factory=dict)
+    tokens: dict[str, int] = field(default_factory=dict)
+    helper_model: dict = field(default_factory=dict)
     hook: str = ""
     step: int = 0
 
@@ -33,12 +35,14 @@ class Context:
     def log(self, producer: str, **data) -> None:
         self.events.append({"producer": producer, "hook": self.hook, "step": self.step, **data})
 
-    def add_cost(self, producer: str, cost: float) -> None:
+    def add_cost(self, producer: str, cost: float, tokens: int = 0) -> None:
         self.costs[producer] = self.costs.get(producer, 0.0) + cost
+        self.tokens[producer] = self.tokens.get(producer, 0) + tokens
 
     def serialize(self) -> dict:
         return {
             "artifacts": {name: asdict(a) for name, a in self.artifacts.items()},
             "events": self.events,
             "costs": self.costs,
+            "tokens": self.tokens,
         }
