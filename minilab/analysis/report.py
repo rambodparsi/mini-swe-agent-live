@@ -1,10 +1,10 @@
 """One analysis for every run: per-task table, per-condition summary, and paired comparisons against a baseline.
 
-A condition is a folder of seed runs (`runs/p1/s1`, `runs/p1/s2`, ...) or a single run folder. A run folder holds
+A condition is a folder of seed runs (`runs/gpt-5.1/p1__3fa2c1/s1`, `.../s2`, ...) or a single run folder. A run folder holds
 `preds.json` and trajectories; its evaluation results are read from `<run>/eval/results.json` (SWE-bench-Live format,
 written by minilab/scripts/evaluate.sh).
 
-Usage: python -m minilab.analysis.report runs/b0 runs/p1 --baseline b0 -o runs/analysis
+Usage: python -m minilab.analysis.report runs/gpt-5.1/b0__3fa2c1 runs/gpt-5.1/p1__9d0e4b --baseline b0 -o runs/analysis
 """
 
 import csv
@@ -114,11 +114,15 @@ def analyze(conditions: dict[str, list[dict]], baseline: str) -> dict:
 @app.command()
 def main(
     condition_dirs: list[Path] = typer.Argument(..., help="One folder per condition (seed runs inside, or one run)"),
-    baseline: str = typer.Option("b0", "--baseline", help="Condition (folder name) to compare against"),
+    baseline: str = typer.Option(
+        "b0", "--baseline", help="Condition to compare against: folder name, or its part before '__'"
+    ),
     output: Path = typer.Option(Path("runs/analysis"), "-o", "--output", help="Folder for tasks.csv and report.json"),
 ) -> None:
-    if baseline not in {d.name for d in condition_dirs}:
-        raise typer.BadParameter(f"Baseline {baseline!r} is not one of the condition folders")
+    matches = [d.name for d in condition_dirs if baseline in (d.name, d.name.split("__")[0])]
+    if len(matches) != 1:
+        raise typer.BadParameter(f"Baseline {baseline!r} must match exactly one condition folder, matched {matches}")
+    baseline = matches[0]
     conditions = {d.name: [r for run in run_dirs(d) for r in run_rows(run, d.name)] for d in condition_dirs}
     if missing := [name for name, rows in conditions.items() if not rows]:
         raise typer.BadParameter(f"No runs (preds.json) found for {missing}")

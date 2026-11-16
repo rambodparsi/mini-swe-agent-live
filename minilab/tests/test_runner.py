@@ -6,7 +6,14 @@ import pytest
 from minilab import Add, Module
 from minilab.core.check import check_run
 from minilab.core.helper_llm import ask
-from minilab.core.runner import process_instance, write_run_files
+from minilab.core.runner import (
+    check_resume,
+    experiment_name,
+    log_run,
+    next_run_dir,
+    process_instance,
+    write_run_files,
+)
 from minilab.tests.test_core import SUBMIT, text_outputs
 from minisweagent.config import get_config_from_spec
 from minisweagent.models.test_models import make_output
@@ -136,3 +143,53 @@ def test_check_run_finds_problems(tmp_path, tamper, instance, problem):
     )
     (out / "provenance.json").unlink()
     assert check_run(out) == {str(out): ["missing provenance.json"]}
+
+
+def test_run_folders_never_reuse_and_separate_setups(tmp_path):
+    config = {"model": {"model_name": "openai/gpt-5.1", "model_kwargs": {"reasoning_effort": "medium"}}}
+    tasks = {"dataset": "d", "split": "lite", "instances": ["a", "b"]}
+    first = next_run_dir(tmp_path, config, "b0", tasks)
+    assert (first.parent.parent.name, first.parent.name.split("__")[0], first.name) == ("gpt-5.1", "b0", "s1")
+    first.mkdir(parents=True)
+    assert next_run_dir(tmp_path, config, "b0", tasks) == first.parent / "s2"
+    changed = [
+        next_run_dir(
+            tmp_path, {"model": {**config["model"], "model_kwargs": {"reasoning_effort": "high"}}}, "b0", tasks
+        ),
+        next_run_dir(tmp_path, config, "b0", {**tasks, "instances": ["a"]}),
+        next_run_dir(tmp_path, config, "p1", tasks),
+    ]
+    assert len({first.parent, *(p.parent for p in changed)}) == 4 and all(p.name == "s1" for p in changed)
+    assert (
+        next_run_dir(tmp_path, {"model": {"model_name": "anthropic/claude-x"}}, "b0", tasks).parent.parent.name
+        == "claude-x"
+    )
+
+
+@pytest.mark.parametrize(
+    ("specs", "name"),
+    [
+        (["swebench.yaml", "minilab/configs/swelive.yaml", "minilab/configs/experiments/b0.yaml"], "b0"),
+        (["minilab/configs/experiments/b0.yaml", "minilab/configs/experiments/p1.yaml", "model.yaml"], "p1"),
+        (["swebench.yaml", "agent.step_limit=10"], "custom"),
+    ],
+)
+def test_experiment_name(specs, name):
+    assert experiment_name(specs) == name
+
+
+def test_resume_only_with_same_config_and_runs_are_indexed(tmp_path):
+    config = {"model": {"model_name": "m"}, "minilab": {"modules": {"lab": {}}}}
+    run = tmp_path / "runs" / "m" / "b0__abc" / "s1"
+    check_resume(run, config)
+    run.mkdir(parents=True)
+    write_run_files(run, config)
+    check_resume(run, config)
+    with pytest.raises(ValueError):
+        check_resume(run, {**config, "model": {"model_name": "other"}})
+    for _ in range(2):
+        log_run(tmp_path / "runs", run, config, "b0", 10)
+    entries = [json.loads(line) for line in (tmp_path / "runs" / "index.jsonl").read_text().splitlines()]
+    assert [(e["output"], e["model"], e["experiment"], e["modules"], e["tasks"]) for e in entries] == [
+        (str(run), "m", "b0", ["lab"], 10)
+    ] * 2
