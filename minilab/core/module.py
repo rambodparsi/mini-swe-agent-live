@@ -22,13 +22,14 @@ class Replace:
 
 class Module:
     """Base class of research modules. Subclasses are dataclasses (their fields are the module's parameters)
-    and override only the hooks they need. `on_submit` returns None to accept or feedback text to reject."""
+    and override only the hooks they need. `setup_env` returns a report of what it added (logged),
+    `on_submit` returns None to accept or feedback text to reject."""
 
     name = "base"
     category = ""
 
     def before_run(self, ctx: Context) -> None: ...
-    def setup_env(self, env, ctx: Context) -> None: ...
+    def setup_env(self, env, ctx: Context) -> dict | str | None: ...
     def prompt_sections(self, ctx: Context) -> dict[str, Add | Replace]:
         return {}
 

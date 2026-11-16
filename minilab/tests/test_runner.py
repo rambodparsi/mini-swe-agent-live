@@ -19,6 +19,10 @@ class Lab(Module):
     def before_run(self, ctx):
         ctx.put("srs", f"SRS for: {ctx.task}", self.name)
 
+    def setup_env(self, env, ctx):
+        env.execute({"command": "echo spec > srs.txt"})
+        return {"files": ["srs.txt"]}
+
     def prompt_sections(self, ctx):
         return {"Requirements": Add(ctx.get("srs"))}
 
@@ -57,5 +61,12 @@ def test_process_instance_runs_hooks_and_saves(tmp_path, attempts, traj_dir, cho
     assert "## Requirements\nSRS for: Fix it\n\n</instructions>" in traj["messages"][1]["content"]
     srs = traj["info"]["minilab"]["artifacts"]["srs"]
     assert (srs["producer"], srs["hook"], srs["version"]) == ("lab", "before_run", 1)
+    assert [(e["producer"], e["hook"]) for e in traj["info"]["minilab"]["events"]] == [
+        ("lab", "setup_env"),
+        ("lab", "prompt_sections"),
+    ]
+    setup, sections = traj["info"]["minilab"]["events"]
+    assert setup["report"] == {"files": ["srs.txt"]} and (tmp_path / "srs.txt").read_text() == "spec\n"
+    assert sections["sections"] == {"Requirements": {"kind": "Add", "text": "SRS for: Fix it"}}
     selection = out / "repo__x-1" / "selection.json"
     assert (json.loads(selection.read_text())["chosen"] if selection.exists() else None) == chosen

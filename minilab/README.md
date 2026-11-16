@@ -81,6 +81,11 @@ Without a `minilab` section the runner behaves like `mini-extra swebench` (same 
 Each trajectory adds `info.minilab` (modules, artifacts, events, costs) and `info.wall_time_seconds`; unknown
 `agent` or `minilab` config keys are errors.
 
+Everything mini-lab puts into a run can be traced to the module that put it there: artifacts record their producer,
+hook and step; messages injected by `before_query` carry `extra.minilab = <module name>`; and `info.minilab.events`
+logs injected messages, `setup_env` reports, prompt sections added or replaced, rejected submissions and changed
+command outputs. Everything else in a trajectory comes from mini itself.
+
 ## Changes to the original code
 
 Every change to files outside `minilab/` is listed here.
