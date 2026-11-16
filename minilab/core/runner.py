@@ -58,10 +58,11 @@ def helper_model_config(config: dict) -> dict:
     return config.get("minilab", {}).get("helper_model") or default
 
 
+def git(*args: str) -> str:
+    return subprocess.run(["git", *args], capture_output=True, text=True, cwd=Path(__file__).parent).stdout.strip()
+
+
 def provenance(config: dict) -> dict:
-    git = lambda *a: subprocess.run(
-        ["git", *a], capture_output=True, text=True, cwd=Path(__file__).parent
-    ).stdout.strip()  # noqa: E731
     return {
         "git_commit": git("rev-parse", "HEAD"),
         "git_dirty": bool(git("status", "--porcelain")),
@@ -70,6 +71,13 @@ def provenance(config: dict) -> dict:
         "modules": sorted(config.get("minilab", {}).get("modules", {})),
         "started": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
     }
+
+
+def select_instances(instances: list[dict], ids: list[str]) -> list[dict]:
+    by_id = {i["instance_id"]: i for i in instances}
+    if missing := [i for i in ids if i not in by_id]:
+        raise ValueError(f"Instances not in the dataset: {missing}")
+    return [by_id[i] for i in ids]
 
 
 def write_run_files(output_path: Path, config: dict) -> None:
@@ -166,6 +174,7 @@ def main(
     split: str = typer.Option("dev", "--split", help="Dataset split"),
     slice_spec: str = typer.Option("", "--slice", help="Slice specification (e.g., '0:5' for first 5 instances)"),
     filter_spec: str = typer.Option("", "--filter", help="Filter instance IDs by regex"),
+    instances_file: Path | None = typer.Option(None, "--instances", help="File with instance IDs, one per line (e.g. minilab/configs/pilot_instances.txt)"),
     shuffle: bool = typer.Option(False, "--shuffle", help="Shuffle instances"),
     output: str = typer.Option("", "-o", "--output", help="Output directory"),
     workers: int = typer.Option(1, "-w", "--workers", help="Number of worker threads"),
@@ -188,6 +197,8 @@ def main(
     instances = filter_instances(
         list(load_dataset(DATASET_MAPPING.get(subset, subset), split=split)), filter_spec=filter_spec, slice_spec=slice_spec, shuffle=shuffle
     )
+    if instances_file:
+        instances = select_instances(instances, instances_file.read_text().split())
     if not redo_existing and (output_path / "preds.json").exists():
         done = json.loads((output_path / "preds.json").read_text())
         instances = [i for i in instances if i["instance_id"] not in done]

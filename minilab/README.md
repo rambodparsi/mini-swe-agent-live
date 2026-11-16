@@ -35,12 +35,18 @@ minilab/
 │   ├── helper_llm.py         ask(): extra LLM calls by modules, cost and tokens recorded per module
 │   ├── runner.py             batch runner: hook order, attempts / best-of-N, saving, provenance.json
 │   └── check.py              integrity check of a run directory (traceability, costs, eval leakage)
+├── analysis/
+│   ├── measures.py           outcome, compute and process measures of one trajectory
+│   └── report.py             per-task table, per-condition summary, paired comparisons vs the baseline
 ├── modules/                  research modules (Requirements, Planning, Testing, Review); registry in __init__.py
 ├── configs/
 │   ├── swelive.yaml          SWE-bench-Live settings, used on top of the built-in swebench.yaml
-│   └── experiments/          one config per experiment (b0.yaml = plain mini baseline)
+│   ├── experiments/          one config per experiment (b0.yaml = plain mini baseline)
+│   └── pilot_instances.txt   fixed pilot task list (written by scripts/make_pilot.py)
 ├── scripts/
 │   ├── check_dataset.py      split size, fields, Docker image names; optionally checks that images exist
+│   ├── make_pilot.py         seeded pilot sample, spread over repositories
+│   ├── evaluate.sh           SWE-bench-Live evaluation of run folders → <run>/eval/
 │   └── smoke.sh              dataset check → gold patches → agent → evaluation, on the first N instances
 └── tests/                    equivalence with plain mini, hooks, prompt sections, helper LLM, runner, check
 ```
@@ -102,6 +108,35 @@ Everything mini-lab puts into a run can be traced to the module that put it ther
 hook and step; messages injected by `before_query` carry `extra.minilab = <module name>`; and `info.minilab.events`
 logs injected messages, `setup_env` reports, prompt sections added or replaced, helper LLM calls, rejected
 submissions and changed command outputs. Everything else in a trajectory comes from mini itself.
+
+## Measuring an experiment
+
+Every condition is measured the same way. A condition is a folder of repeated runs ("seeds") on the same task list:
+
+```bash
+python minilab/scripts/make_pilot.py -n 30        # once; commit minilab/configs/pilot_instances.txt
+for s in 1 2 3; do
+  python -m minilab.core.runner -c swebench.yaml -c minilab/configs/swelive.yaml -c minilab/configs/experiments/b0.yaml \
+    --subset SWE-bench-Live/SWE-bench-Live --split lite --instances minilab/configs/pilot_instances.txt -w 4 -o runs/b0/s$s
+done
+bash minilab/scripts/evaluate.sh runs/b0/s*       # → runs/b0/s*/eval/results.json
+python -m minilab.analysis.report runs/b0 runs/p1 --baseline b0 -o runs/analysis
+```
+
+`report` writes `tasks.csv` (one row per condition, seed and task) and `report.json` (per-condition means and
+comparisons), and prints a summary. Measures per task:
+
+| Kind | Measures |
+|---|---|
+| Outcome | `resolved` (from the evaluation; empty if not evaluated), `submitted`, `exit_status` |
+| Compute | `agent_cost`, `helper_cost`, `total_cost` (summed over `--attempts`), `helper_tokens`, `steps`, `wall_time_seconds` |
+| Process | `steps_to_first_edit`, `plan_before_first_edit`, `test_commands`, `repro_script`, `git_diff_before_submit`, `rejections` |
+| Patch | `files_touched`, `lines_added`, `lines_removed` |
+
+Process measures are heuristics over the commands and the model's text (patterns in `analysis/measures.py`).
+Comparisons are paired by task: each task's value is first averaged over seeds (runs of one task are not independent),
+then the mean per-task difference (condition − baseline) gets a 95% bootstrap interval over tasks. This is done for
+`resolved`, `total_cost` and `steps`. With exactly one seed on both sides, an exact McNemar test on `resolved` is added.
 
 ## Changes to the original code
 
