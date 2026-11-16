@@ -29,16 +29,20 @@ git fetch upstream && git merge upstream/main
 minilab/
 ├── README.md                 this file
 ├── core/
-│   ├── context.py            shared context of one attempt: task, artifacts with provenance, events, costs
+│   ├── context.py            shared context of one attempt: task, artifacts with provenance, events, costs, tokens
 │   ├── module.py             Module base class (the hooks), module loading, prompt sections (Add / Replace)
 │   ├── agent.py              LabAgent: mini's DefaultAgent + hooks; no modules = plain mini
-│   └── runner.py             batch runner: hook order, attempts / best-of-N, saving
+│   ├── helper_llm.py         ask(): extra LLM calls by modules, cost and tokens recorded per module
+│   ├── runner.py             batch runner: hook order, attempts / best-of-N, saving, provenance.json
+│   └── check.py              integrity check of a run directory (traceability, costs, eval leakage)
 ├── modules/                  research modules (Requirements, Planning, Testing, Review); registry in __init__.py
-├── configs/swelive.yaml      SWE-bench-Live settings, used on top of the built-in swebench.yaml
+├── configs/
+│   ├── swelive.yaml          SWE-bench-Live settings, used on top of the built-in swebench.yaml
+│   └── experiments/          one config per experiment (b0.yaml = plain mini baseline)
 ├── scripts/
 │   ├── check_dataset.py      split size, fields, Docker image names; optionally checks that images exist
 │   └── smoke.sh              dataset check → gold patches → agent → evaluation, on the first N instances
-└── tests/                    equivalence with plain mini, submission handling, hooks, prompt sections, runner
+└── tests/                    equivalence with plain mini, hooks, prompt sections, helper LLM, runner, check
 ```
 
 Run outputs (`runs/`, `logs/`) are not version-controlled.
@@ -52,7 +56,7 @@ parameters and it overrides only the hooks it needs:
 |---|---|---|
 | `before_run(ctx)` | before the container starts | nothing (writes artifacts with `ctx.put`) |
 | `setup_env(env, ctx)` | after the container starts | nothing |
-| `prompt_sections(ctx)` | when the prompt is built | `{name: Add(text) or Replace(text)}` for `## <name>` sections |
+| `prompt_sections(ctx)` | when the prompt is built | `{name: Add(text, before=None) or Replace(text)}` for `## <name>` sections |
 | `before_query(agent, ctx)` | before each model call | messages to inject |
 | `on_execute(action, output, ctx)` | after each command | nothing (record only) |
 | `transform_output(action, output, ctx)` | after each command | changed output (raw and changed are both logged) |
@@ -65,26 +69,39 @@ experiment may implement `transform_output`, `on_submit` or `select_attempt`. An
 lists modules by registry name or import path, with their parameters:
 
 ```yaml
-# runs on top of swebench.yaml + minilab/configs/swelive.yaml
+# minilab/configs/experiments/<name>.yaml, on top of swebench.yaml + minilab/configs/swelive.yaml
 minilab:
   modules:
     my_package.my_module.MyModule: {quality: good}
+  helper_model: {model_name: openai/gpt-5.1-mini}   # optional; module LLM calls default to the main model
 ```
+
+Section text is passed to the template as a variable, so module text is never parsed as Jinja. `Add(before="Submission")`
+places a new section before an existing one (default: end of the instructions); a missing section is an error.
+Modules that need an LLM call `minilab.core.helper_llm.ask(ctx, self.name, prompt)`: a plain completion without
+mini's bash tool, with its cost and tokens recorded under the module's name and the prompt and answer logged.
 
 ```bash
 python -m minilab.core.runner -c swebench.yaml -c minilab/configs/swelive.yaml -c <experiment>.yaml \
   --subset SWE-bench-Live/SWE-bench-Live --split lite --slice 0:10 -w 2 -o runs/<name>
+python -m minilab.core.check runs/<name> --subset SWE-bench-Live/SWE-bench-Live --split lite
 python -m pytest minilab/tests            # from the repository root
 ```
 
+`check` fails a run if `config.json` or `provenance.json` (git commit, mini version, Python, modules) is missing, if a
+trajectory's prompt is not the config prompt plus its logged sections, if events or injected messages come from a
+module that is not configured, if a helper call has no recorded cost, or (with `--subset`) if a module output contains
+an evaluation test file, a FAIL_TO_PASS/PASS_TO_PASS id or a line of the gold patch.
+
 Without a `minilab` section the runner behaves like `mini-extra swebench` (same prompts, commands and patches).
-Each trajectory adds `info.minilab` (modules, artifacts, events, costs) and `info.wall_time_seconds`; unknown
+Each trajectory adds `info.minilab` (modules, artifacts, events, costs, tokens), `info.wall_time_seconds` and
+`info.base_commit`; unknown
 `agent` or `minilab` config keys are errors.
 
 Everything mini-lab puts into a run can be traced to the module that put it there: artifacts record their producer,
 hook and step; messages injected by `before_query` carry `extra.minilab = <module name>`; and `info.minilab.events`
-logs injected messages, `setup_env` reports, prompt sections added or replaced, rejected submissions and changed
-command outputs. Everything else in a trajectory comes from mini itself.
+logs injected messages, `setup_env` reports, prompt sections added or replaced, helper LLM calls, rejected
+submissions and changed command outputs. Everything else in a trajectory comes from mini itself.
 
 ## Changes to the original code
 

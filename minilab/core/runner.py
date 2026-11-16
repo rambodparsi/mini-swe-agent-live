@@ -7,6 +7,8 @@ Usage (from the repository root):
 
 import concurrent.futures
 import json
+import platform
+import subprocess
 import time
 import traceback
 from pathlib import Path
@@ -14,9 +16,10 @@ from pathlib import Path
 import typer
 from rich.live import Live
 
+import minisweagent
 from minilab.core.agent import LabAgent
 from minilab.core.context import Context
-from minilab.core.module import apply_sections, call, load_modules, overrides
+from minilab.core.module import apply_sections, call, load_modules, overrides, section_values
 from minisweagent.agents.default import AgentConfig
 from minisweagent.config import get_config_from_spec
 from minisweagent.models import get_model
@@ -44,14 +47,40 @@ def check_config(config: dict) -> None:
     """Fail on unknown keys that mini would silently ignore."""
     if unknown := set(config.get("agent", {})) - set(AgentConfig.model_fields):
         raise ValueError(f"Unknown agent config keys: {sorted(unknown)}")
-    if unknown := set(config.get("minilab", {})) - {"modules"}:
+    if unknown := set(config.get("minilab", {})) - {"modules", "helper_model"}:
         raise ValueError(f"Unknown minilab config keys: {sorted(unknown)}")
+
+
+def helper_model_config(config: dict) -> dict:
+    """`minilab.helper_model`, or the main model's name and kwargs (without the main model's class)."""
+    model = config.get("model", {})
+    default = {"model_name": model.get("model_name", ""), "model_kwargs": model.get("model_kwargs", {})}
+    return config.get("minilab", {}).get("helper_model") or default
+
+
+def provenance(config: dict) -> dict:
+    git = lambda *a: subprocess.run(
+        ["git", *a], capture_output=True, text=True, cwd=Path(__file__).parent
+    ).stdout.strip()  # noqa: E731
+    return {
+        "git_commit": git("rev-parse", "HEAD"),
+        "git_dirty": bool(git("status", "--porcelain")),
+        "mini_version": minisweagent.__version__,
+        "python": platform.python_version(),
+        "modules": sorted(config.get("minilab", {}).get("modules", {})),
+        "started": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+    }
+
+
+def write_run_files(output_path: Path, config: dict) -> None:
+    (output_path / "config.json").write_text(json.dumps(config, indent=2))
+    (output_path / "provenance.json").write_text(json.dumps(provenance(config), indent=2))
 
 
 def run_attempt(instance: dict, config: dict, traj_path: Path, progress_manager: RunBatchProgressManager) -> dict:
     """One agent run with the per-attempt hooks: before_run, setup_env, prompt_sections, (agent hooks), after_run."""
     modules = load_modules(config.get("minilab", {}).get("modules", {}))
-    ctx = Context(task=instance["problem_statement"], instance=instance)
+    ctx = Context(task=instance["problem_statement"], instance=instance, helper_model=helper_model_config(config))
     agent, result, start = None, {}, time.time()
     try:
         call(modules, ctx, "before_run")
@@ -62,7 +91,7 @@ def run_attempt(instance: dict, config: dict, traj_path: Path, progress_manager:
         agent_config, sections = dict(config.get("agent", {})), {}
         for module, added in zip(modules, call(modules, ctx, "prompt_sections")):
             if added:
-                ctx.log(module.name, sections={k: {"kind": type(v).__name__, "text": v.text} for k, v in added.items()})
+                ctx.log(module.name, sections={k: {"kind": type(v).__name__, **vars(v)} for k, v in added.items()})
             sections |= added
         if sections:
             agent_config["instance_template"] = apply_sections(agent_config["instance_template"], sections)
@@ -75,7 +104,7 @@ def run_attempt(instance: dict, config: dict, traj_path: Path, progress_manager:
             instance_id=instance["instance_id"],
             **agent_config,
         )
-        result = agent.run(ctx.task)
+        result = agent.run(ctx.task, **({"minilab_sections": section_values(sections)} if sections else {}))
     except Exception as e:
         logger.error(f"Error processing instance {instance['instance_id']}: {e}", exc_info=True)
         result = {"exit_status": type(e).__name__, "submission": "", "exception_str": str(e)}
@@ -85,6 +114,7 @@ def run_attempt(instance: dict, config: dict, traj_path: Path, progress_manager:
         for m in modules:
             result = m.after_run(result, ctx)
         result["wall_time_seconds"] = round(time.time() - start, 2)
+        result["base_commit"] = instance.get("base_commit", "")
         if agent is not None:
             agent.save(traj_path, {"info": result, "instance_id": instance["instance_id"]})
     return result
@@ -109,10 +139,8 @@ def process_instance(
     ]
     chosen = runs[0]
     if attempts > 1:
-        modules, ctx = (
-            load_modules(config.get("minilab", {}).get("modules", {})),
-            Context(task=instance["problem_statement"], instance=instance),
-        )
+        modules = load_modules(config.get("minilab", {}).get("modules", {}))
+        ctx = Context(task=instance["problem_statement"], instance=instance, helper_model=helper_model_config(config))
         ctx.hook = "select_attempt"
         chosen = next((m.select_attempt(runs, ctx) for m in modules if overrides(m, "select_attempt")), runs[0])
         (instance_dir / "selection.json").write_text(
@@ -153,7 +181,7 @@ def main(
     config = recursive_merge(*[get_config_from_spec(spec) for spec in config_spec], {"model": {"model_name": model or UNSET}})
     check_config(config)
     load_modules(config.get("minilab", {}).get("modules", {}))
-    (output_path / "config.json").write_text(json.dumps(config, indent=2))
+    write_run_files(output_path, config)
 
     from datasets import load_dataset
 

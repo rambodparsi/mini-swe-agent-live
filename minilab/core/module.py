@@ -10,9 +10,15 @@ ORDER = ["requirements", "planning", "testing", "review"]
 SINGLE = ["transform_output", "on_submit", "select_attempt"]
 
 
+SECTION_NAME = re.compile(r"[\w .,:()/&+-]+")
+
+
 @dataclass
 class Add:
+    """A new `## <name>` section, placed before the section named in `before` (default: end of the instructions)."""
+
     text: str
+    before: str | None = None
 
 
 @dataclass
@@ -79,17 +85,32 @@ def load_modules(spec: dict[str, dict]) -> list[Module]:
     return sorted(modules, key=lambda m: ORDER.index(m.category) if m.category in ORDER else len(ORDER))
 
 
+def section_pattern(name: str) -> str:
+    return rf"^## {re.escape(name)}\n.*?(?=^## |^</instructions>|\Z)"
+
+
 def apply_sections(template: str, sections: dict[str, Add | Replace]) -> str:
-    """Replace or add `## <name>` sections of an instance template. Other text stays byte for byte."""
+    """Replace or add `## <name>` sections of an instance template. Other text stays byte for byte.
+    The section text is not pasted in: a placeholder renders it from the `minilab_sections` template
+    variable, so text containing Jinja syntax arrives verbatim (see `section_values`)."""
     for name, section in sections.items():
+        if not SECTION_NAME.fullmatch(name):
+            raise ValueError(f"Invalid section name {name!r}")
+        block = f'## {name}\n{{{{ minilab_sections["{name}"] }}}}\n\n'
         if isinstance(section, Replace):
-            pattern = rf"^## {re.escape(name)}\n.*?(?=^## |^</instructions>|\Z)"
-            new = f"## {name}\n{section.text.rstrip()}\n\n"
-            template, n = re.subn(pattern, lambda _: new, template, count=1, flags=re.S | re.M)
+            template, n = re.subn(section_pattern(name), lambda _: block, template, count=1, flags=re.S | re.M)
             if not n:
                 raise KeyError(f"No section '## {name}' in the instance template")
+        elif section.before is not None:
+            if not (match := re.search(rf"^## {re.escape(section.before)}\n", template, flags=re.M)):
+                raise KeyError(f"No section '## {section.before}' to place '## {name}' before")
+            template = template[: match.start()] + block + template[match.start() :]
         elif "</instructions>" in template:
-            template = template.replace("</instructions>", f"## {name}\n{section.text.rstrip()}\n\n</instructions>", 1)
+            template = template.replace("</instructions>", block + "</instructions>", 1)
         else:
-            template += f"\n## {name}\n{section.text.rstrip()}\n"
+            template += f"\n{block}"
     return template
+
+
+def section_values(sections: dict[str, Add | Replace]) -> dict[str, str]:
+    return {name: section.text.rstrip() for name, section in sections.items()}

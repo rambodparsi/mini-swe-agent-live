@@ -1,0 +1,6 @@
+# B0: plain mini-SWE-agent baseline (no modules). Every other experiment is compared against this.
+# Run: python -m minilab.core.runner -c swebench.yaml -c minilab/configs/swelive.yaml \
+#        -c minilab/configs/experiments/b0.yaml --subset SWE-bench-Live/SWE-bench-Live --split lite -o runs/b0
+minilab:
+  modules: {}
+  # helper_model: {model_name: openai/gpt-5.1-mini}  # model for module LLM calls; defaults to the main model
