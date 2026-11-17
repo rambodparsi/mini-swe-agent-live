@@ -195,7 +195,133 @@ docker run --rm hello-world
 python minilab/scripts/check_dataset.py -n 2 --check-images
 ```
 
-## Running
+## Running the baseline (step by step)
+
+All commands run from the repository root (`mini-swe-agent-live/`), with `SWE-bench-Live/` next to it.
+
+### Once
+
+```bash
+git checkout main && git pull
+source .venv/bin/activate && pip install -e .
+python minilab/scripts/download_dataset.py                          # local copy → data/SWE-bench-Live
+python minilab/scripts/make_pilot.py --dataset data/SWE-bench-Live  # 10 tasks → minilab/configs/pilot_instances.txt
+```
+
+Commit `minilab/configs/dataset_revision.txt` and `minilab/configs/pilot_instances.txt` (both are already in the
+repository; do this only when starting from a new dataset version). `data/` and `runs/` are not version-controlled.
+
+### 1. Start a session
+
+Runs take a while, so use `tmux` (the run continues if the connection drops; leave with `Ctrl-b d`, return with
+`tmux attach -t b0`). A new terminal or tmux window needs the environment again:
+
+```bash
+tmux new -s b0
+cd <path>/mini-swe-agent-live && source .venv/bin/activate
+git pull
+```
+
+### 2. Check the setup with the gold patches (optional, once per machine)
+
+The dataset's correct patches must pass; this checks Docker, the images, the evaluator and the local dataset copy.
+
+```bash
+REPO=$PWD
+head -2 minilab/configs/pilot_instances.txt > runs_smoke_ids.txt && mkdir -p runs/smoke
+(cd ../SWE-bench-Live && .venv/bin/python -m evaluation.evaluation \
+  --dataset "$REPO/data/SWE-bench-Live" --split lite --platform linux \
+  --patch_dir gold --output_dir "$REPO/runs/smoke/gold" --workers 2 --overwrite 0 \
+  --instance_ids $(cat "$REPO/runs_smoke_ids.txt"))
+cat runs/smoke/gold/results.json                                    # both IDs under success_ids
+```
+
+The evaluator may end with `TypeError: Object of type datetime is not JSON serializable`. This happens after the
+results are saved and can be ignored.
+
+### 3. Run the agent: baseline, 3 seeds, 10 tasks
+
+```bash
+for s in 1 2 3; do
+  python -m minilab.core.runner -c swebench.yaml -c minilab/configs/swelive.yaml -c minilab/configs/experiments/b0.yaml \
+    --subset data/SWE-bench-Live --split lite --instances minilab/configs/pilot_instances.txt -w 4
+done
+```
+
+Each loop iteration is one seed. With the same config the three runs go to the same condition folder as `s1`, `s2`, `s3`.
+Each task is capped by `cost_limit` and `step_limit` in `minilab/configs/swelive.yaml`. Lower `-w` if the machine struggles.
+
+### 4. Find the run folder
+
+```bash
+cat runs/index.jsonl          # one line per run: output folder, model, experiment, tasks, time, git commit
+```
+
+The folder is `runs/<model>/b0__<id>/` (e.g. `runs/gpt-5.1/b0__3fa2c1/`); `<model>` is the last part of `model_name`
+and `<id>` changes with any config change. Below, `RUN` stands for that folder:
+
+```bash
+RUN=runs/<model>/b0__<id>     # copy it from index.jsonl
+cat $RUN/s*/exit_statuses_*.yaml                                   # how each task ended (Submitted, LimitsExceeded, errors)
+```
+
+### 5. Check, evaluate, summarize
+
+```bash
+for d in $RUN/s*; do python -m minilab.core.check $d --subset data/SWE-bench-Live --split lite; done
+DATASET=data/SWE-bench-Live WORKERS=4 bash minilab/scripts/evaluate.sh $RUN/s*
+python -m minilab.analysis.report $RUN --baseline b0 -o runs/analysis
+```
+
+| Step | What it does | Expected output |
+|---|---|---|
+| `check` | Each seed folder is complete and traceable; no evaluation tests or gold patch in module outputs | `OK` per seed |
+| `evaluate.sh` | Applies every patch in the task's Docker image and runs the task's tests (the slow step) | `Success: X  Failure: Y` per seed; results in `<seed>/eval/results.json` |
+| `report` | Combines the seeds into one table and summary | e.g. `b0__3fa2c1: 3 run(s), 10 tasks, resolved 36.7%, cost $0.25/task, 30.1 steps` |
+
+### Outputs
+
+| Path | Content |
+|---|---|
+| `runs/index.jsonl` | every run: folder, model, experiment, modules, tasks, time, git commit |
+| `$RUN/s<k>/config.json`, `provenance.json` | the exact merged config; git commit, dataset version, mini and Python versions |
+| `$RUN/s<k>/preds.json` | the agent's patch per task |
+| `$RUN/s<k>/<task>/<task>.traj.json` | full trajectory: every model message, command and output (`mini-extra inspect $RUN/s1`) |
+| `$RUN/s<k>/exit_statuses_*.yaml` | how each task ended |
+| `$RUN/s<k>/eval/results.json`, `eval/<task>/report.json` | resolved / failed tasks, and which tests failed |
+| `runs/analysis/tasks.csv`, `report.json` | one row per seed and task; per-condition means and comparisons |
+
+### Changing the model
+
+Prefer a small file added last over editing `swelive.yaml`, so the shared base stays the same and the repository matches
+what was run (`provenance.json` records `git_dirty: true` for uncommitted changes):
+
+```yaml
+# minilab/configs/models/<name>.yaml
+model:
+  model_name: anthropic/claude-sonnet-4-5
+  model_kwargs: {drop_params: true, parallel_tool_calls: true}
+```
+
+```bash
+python -m minilab.core.runner ... -c minilab/configs/experiments/b0.yaml -c minilab/configs/models/<name>.yaml ...
+```
+
+The run goes to `runs/<new model>/b0__<id>/`; earlier runs are kept. A new provider needs its own key
+(`mini-extra config set ANTHROPIC_API_KEY ...`), and `reasoning_effort` is an OpenAI setting.
+
+### Common problems
+
+| Symptom | Cause and fix |
+|---|---|
+| `missing config.json` / `realpath: 'runs/.../b0__*/s*': No such file` | The path does not exist (e.g. a different model folder). Take the folder from `runs/index.jsonl` |
+| `cat: runs_smoke_ids.txt: No such file` | Command run from the wrong folder; `cd` to the repository root first |
+| `python: command not found` / wrong packages | Environment not active in this terminal or tmux window: `source .venv/bin/activate` |
+| `... was run with a different config` | `-o` points to a folder made with another config; leave out `-o` to get a new folder |
+| `git push`: password authentication not supported | Use `gh auth login` (GitHub CLI) or a personal access token, not the account password |
+| Docker `permission denied` | `sudo usermod -aG docker $USER`, then log out and in |
+
+## Smoke test (plain mini)
 
 Smoke test on the first 2 instances (from the repository root, with `.venv` active):
 
