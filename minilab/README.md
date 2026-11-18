@@ -37,7 +37,9 @@ minilab/
 │   └── check.py              integrity check of a run directory (traceability, costs, eval leakage)
 ├── analysis/
 │   ├── actions.py            action classification (paper's Table 1) and error detection, deterministic rules
-│   ├── behavior.py           behavior profile per run (Level 1): Table 2 features, CFG features, patterns P1-P7
+│   ├── behavior.py           behavior analysis command; Level 1 profile per run (Table 2, CFG features, P1-P7)
+│   ├── compare.py            Level 2: repeated runs of a task compared (sequences, files, patches, metric spread)
+│   ├── figures.py            SVG figures (timelines, similarity heatmap), no plotting dependency
 │   ├── measures.py           outcome, compute and process measures of one trajectory
 │   └── report.py             per-task table, per-condition summary, paired comparisons vs the baseline
 ├── modules/                  research modules (Requirements, Planning, Testing, Review); registry in __init__.py
@@ -164,7 +166,7 @@ Comparisons are paired by task: each task's value is first averaged over seeds (
 then the mean per-task difference (condition − baseline) gets a 95% bootstrap interval over tasks. This is done for
 `resolved`, `total_cost` and `steps`. With exactly one seed on both sides, an exact McNemar test on `resolved` is added.
 
-## Behavior analysis (Level 1)
+## Behavior analysis (Levels 1 and 2)
 
 A deterministic profile of how the agent behaved in every run, following *Same Signal, Different Semantics: A
 Cross-Framework Behavioral Analysis of Software Engineering Agents* (no LLM judgments):
@@ -181,6 +183,14 @@ python -m minilab.analysis.behavior runs/<model>/<condition> [more conditions] -
 | `level1/classification_audit.csv` | every command part with its category and the rule that matched (for checking the rules by hand) |
 | `summary/overall_summary.csv` | per condition and feature: mean, median, range, and means of resolved vs. not resolved runs |
 | `summary/thresholds.json` | the medians used for P3, P5 and P6 |
+| `level2/pairwise_similarity.csv` | one row per pair of runs of the same task and condition: outcomes, sequence, file and patch similarity |
+| `level2/issue_summary.csv` | one row per task: resolved runs, outcome consistency, distinct sequences and patches, mean pairwise similarity, timelines |
+| `level2/metric_spread.csv` | per task and behavioral metric: the value of every run, mean, standard deviation, range |
+| `level2/issue_comparisons/<condition>__<task>.md` | timelines side by side, metrics per run, pairwise table, files |
+| `level2/patch_comparisons/<condition>__<task>.md` | changed lines only in one run of each pair, and every run's patch |
+| `summary/level2_summary.csv` | per condition: pairs with the same outcome, identical sequence or patch, mean similarities |
+| `summary/figures/<condition>__timelines.svg` | every run as a row of turns colored and lettered by category, errors outlined |
+| `summary/figures/<condition>__similarity.svg` | tasks x similarity measures heatmap with values (open in a browser) |
 
 **Turns and categories.** A turn is one model call with its command and result. Commands are split into parts
 (`&&`, `||`, `;`, `|`, `&`, newlines; quotes, `$(...)` and here-documents are kept intact). Each part gets one of the
@@ -206,6 +216,19 @@ the output: `command_not_found`, `timeout`, `syntax_error`, `import_error`, `tes
 | Phase transition point | "dominant category first shifts" | first turn where the most frequent category so far changes (ties keep the old one), divided by turns |
 | Entropies | Shannon entropy | base 2 (bits) |
 | Aggregation, PCA, clustering, meta-analysis | per configuration | not done: one profile per run |
+
+**Level 2 measures** (each pair of runs of a task; 1 = identical, 0 = nothing in common):
+
+| Measure | Definition |
+|---|---|
+| `sequence_similarity` | 1 - edit distance between the two turn-category sequences / length of the longer one |
+| `lcs_ratio` | longest common subsequence of the two sequences / length of the longer one |
+| `transition_jaccard` | overlap of the sets of consecutive category pairs (which transitions occur at all) |
+| `explored_files_jaccard`, `modified_files_jaccard` | overlap of the explored / modified file sets |
+| `identical_patch` | same patch after removing `index` lines and trailing whitespace |
+| `patch_text_similarity` | `difflib` ratio of the normalized patch lines (includes context lines) |
+| `changed_lines_jaccard` | overlap of the added/removed lines (per file, whitespace-trimmed): did the runs write the same code? |
+| `touched_lines_jaccard` | overlap of the original-file line numbers covered by the hunks: did they change the same place? |
 
 Navigation is almost never a turn's category in mini, because `cd` is always chained with another command.
 Explored files are path-like arguments of exploration commands (approximate); modified files come from the patch.
