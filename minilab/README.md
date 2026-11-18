@@ -36,6 +36,8 @@ minilab/
 │   ├── runner.py             batch runner: hook order, attempts / best-of-N, saving, provenance.json
 │   └── check.py              integrity check of a run directory (traceability, costs, eval leakage)
 ├── analysis/
+│   ├── actions.py            action classification (paper's Table 1) and error detection, deterministic rules
+│   ├── behavior.py           behavior profile per run (Level 1): Table 2 features, CFG features, patterns P1-P7
 │   ├── measures.py           outcome, compute and process measures of one trajectory
 │   └── report.py             per-task table, per-condition summary, paired comparisons vs the baseline
 ├── modules/                  research modules (Requirements, Planning, Testing, Review); registry in __init__.py
@@ -161,6 +163,53 @@ Process measures are heuristics over the commands and the model's text (patterns
 Comparisons are paired by task: each task's value is first averaged over seeds (runs of one task are not independent),
 then the mean per-task difference (condition − baseline) gets a 95% bootstrap interval over tasks. This is done for
 `resolved`, `total_cost` and `steps`. With exactly one seed on both sides, an exact McNemar test on `resolved` is added.
+
+## Behavior analysis (Level 1)
+
+A deterministic profile of how the agent behaved in every run, following *Same Signal, Different Semantics: A
+Cross-Framework Behavioral Analysis of Software Engineering Agents* (no LLM judgments):
+
+```bash
+python -m minilab.analysis.behavior runs/<model>/<condition> [more conditions] -o runs/analysis/behavior
+```
+
+| Output | Content |
+|---|---|
+| `level1/run_features.csv` | one row per run: outcome, execution (turns, time, tokens, cost), action counts, error counts by type, timeline, the paper's 16 features, 6 control-flow-graph features, patterns P1-P7, files explored / modified, patch size |
+| `level1/action_timelines/<condition>__<seed>__<task>.csv` | one row per turn: category, stage, error type, post-error, repeated, every command part with its rule, return code, tokens, cost, full command |
+| `level1/run_reports/<condition>__<seed>__<task>.md` | readable profile of one run (timeline, patterns, errors, files, all features) |
+| `level1/classification_audit.csv` | every command part with its category and the rule that matched (for checking the rules by hand) |
+| `summary/overall_summary.csv` | per condition and feature: mean, median, range, and means of resolved vs. not resolved runs |
+| `summary/thresholds.json` | the medians used for P3, P5 and P6 |
+
+**Turns and categories.** A turn is one model call with its command and result. Commands are split into parts
+(`&&`, `||`, `;`, `|`, `&`, newlines; quotes, `$(...)` and here-documents are kept intact). Each part gets one of the
+paper's categories (Exploration, Modification, Test, Navigation, Utility, Unknown) by the rules in
+`analysis/actions.py`; the turn gets the highest-priority category of its parts:
+Modification > Test > Exploration > Utility > Unknown > Navigation. A turn that submits (`COMPLETE_TASK_...`) is Utility.
+
+**Errors.** A turn is an error turn if its return code is non-zero, except `grep`/`rg`/`diff` finding nothing
+(code 1 without an error message), or if the output reports a missing command. The type is taken from the end of
+the output: `command_not_found`, `timeout`, `syntax_error`, `import_error`, `test_failure`, `file_not_found`,
+`permission_denied`, `tool_error`, `traceback`, `usage_error`, `nonzero_exit`.
+
+**Where this differs from the paper** (the paper does not publish these details, or mini needs them):
+
+| Topic | Paper | Here |
+|---|---|---|
+| Chained commands | one category per action | category per part, turn by priority (above) |
+| Python scripts (`python - <<'PY'`) | not specified | write to a repository file → Modification (`python_edit`); write only to `/tmp` → Test (`python_scratch`); otherwise → Test (`python_run`, the agent's reproduction and check scripts). Strict test-runner turns are counted separately (`test_runner_turns`) |
+| Scratch files | not specified | writes under `/tmp` are check scripts → Test; `git diff > patch.txt` → Utility (`make_patch`) |
+| Linters | not specified | `ruff`, `flake8`, `mypy`, ... → Test (`lint`) |
+| Error types | 15 regex types (only examples named) | the 11 types above, with return codes |
+| P3, P5, P6 thresholds | medians of the paper's mini-swe-agent runs (not published) | medians over the analysed runs (`summary/thresholds.json`) |
+| Phase transition point | "dominant category first shifts" | first turn where the most frequent category so far changes (ties keep the old one), divided by turns |
+| Entropies | Shannon entropy | base 2 (bits) |
+| Aggregation, PCA, clustering, meta-analysis | per configuration | not done: one profile per run |
+
+Navigation is almost never a turn's category in mini, because `cd` is always chained with another command.
+Explored files are path-like arguments of exploration commands (approximate); modified files come from the patch.
+Check the rules once on a sample of `classification_audit.csv` before relying on them for a new model.
 
 ## Changes to the original code
 
