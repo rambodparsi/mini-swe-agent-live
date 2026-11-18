@@ -203,5 +203,15 @@ def test_behavior_cli_on_runs_is_complete_and_deterministic(tmp_path):
     first = next(r for r in rows if r["seed"] == "s1" and r["instance_id"] == "repo__x-1")
     assert (first["resolved"], first["timeline"], first["errors_file_not_found"]) == ("True", "E! M T U U", "1")
     assert (first["P7_test_after_modify"], first["P1_explore_before_modify"]) == ("True", "True")
+    pairs = list(csv.DictReader((outs[0] / "level2" / "pairwise_similarity.csv").open()))
+    assert [(p["instance_id"], p["run_a"], p["run_b"], p["same_outcome"]) for p in pairs] == [
+        ("repo__x-1", "s1", "s2", "False"),
+        ("repo__x-2", "s1", "s2", "True"),
+    ]
+    assert {f.name for f in (outs[0] / "summary" / "figures").iterdir()} == {
+        "b0__abc__timelines.svg",
+        "b0__abc__similarity.svg",
+    }
+    assert len(list((outs[0] / "level2" / "issue_comparisons").iterdir())) == 2
     audit = list(csv.DictReader((outs[0] / "level1" / "classification_audit.csv").open()))
     assert {a["rule"] for a in audit} >= {"read_search", "in_place_edit", "test_runner", "git", "submit"}

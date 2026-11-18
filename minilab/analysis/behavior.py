@@ -1,4 +1,5 @@
-"""Behavior analysis of mini-swe-agent trajectories (Level 1: one profile per run), fully deterministic.
+"""Behavior analysis of mini-swe-agent trajectories, fully deterministic.
+Level 1: one profile per run. Level 2: how repeated runs of the same task differ (minilab/analysis/compare.py).
 
 Features follow "Same Signal, Different Semantics": the 16 features of Table 2, the 6 control-flow-graph features of
 §3.3 and the binary patterns P1-P7 of Table 4, computed per run instead of per configuration.
@@ -17,6 +18,8 @@ from statistics import mean, median
 import typer
 
 from minilab.analysis.actions import Part, classify_command, error_type, turn_category
+from minilab.analysis.compare import compare_all, condition_summary, groups, issue_report, patch_report
+from minilab.analysis.figures import similarity_svg, timelines_svg
 from minilab.analysis.measures import patch_stats
 from minilab.analysis.report import resolved_ids, run_dirs
 
@@ -214,6 +217,7 @@ def run_profile(traj: dict, condition: str, seed: str, resolved: bool | None) ->
         **cfg_features(turns),
         **files_of(turns, info.get("submission", "")),
         **patch_stats(info.get("submission", "")),
+        "patch": info.get("submission", ""),  # kept for Level 2; not written to the CSV files
     }
     return row, turns
 
@@ -289,7 +293,7 @@ def run_report(row: dict, turns: list[Turn]) -> str:
         f"| {t.index} | {t.error} | {t.returncode} | `{t.command.splitlines()[0][:90]}` |" for t in turns if t.error
     )
     features = "\n".join(f"| {k} | {v:.3f} |" if isinstance(v, float) else f"| {k} | {v} |" for k, v in row.items()
-                         if k not in ("explored_files", "modified_files", "timeline"))  # fmt: skip
+                         if k not in ("explored_files", "modified_files", "timeline", "patch"))  # fmt: skip
     return f"""# {row["instance_id"]} ({row["condition"]}, {row["seed"]})
 
 Outcome: **{outcome}**, exit status `{row["exit_status"]}`, {row["turns"]} turns, {row["duration_seconds"]} s, ${row["cost"]:.3f}.
@@ -340,7 +344,7 @@ def summarize(rows: list[dict]) -> list[dict]:
 
 
 def write_level1(profiles: list[tuple[dict, list[Turn]]], output: Path) -> None:
-    rows = [row for row, _ in profiles]
+    rows = [{k: v for k, v in row.items() if k != "patch"} for row, _ in profiles]
     write_csv(output / "level1" / "run_features.csv", rows)
     audit = []
     for row, turns in profiles:
@@ -362,6 +366,39 @@ def write_level1(profiles: list[tuple[dict, list[Turn]]], output: Path) -> None:
     (output / "summary" / "thresholds.json").write_text(json.dumps(thresholds, indent=2))
 
 
+def write_level2(profiles: list[tuple[dict, list[Turn]]], output: Path) -> list[dict]:
+    pairwise, issues, spread = compare_all(profiles)
+    by_task = groups(profiles)
+    figures = output / "summary" / "figures"
+    figures.mkdir(parents=True, exist_ok=True)
+    for condition in dict.fromkeys(c for c, _ in by_task):
+        tasks = [[r for r, _ in runs] for (c, _), runs in by_task.items() if c == condition]
+        turns = {
+            (r["instance_id"], r["seed"]): t for (c, _), runs in by_task.items() if c == condition for r, t in runs
+        }
+        (figures / f"{condition}__timelines.svg").write_text(timelines_svg(condition, tasks, turns))
+        if condition_issues := [i for i in issues if i["condition"] == condition]:
+            (figures / f"{condition}__similarity.svg").write_text(similarity_svg(condition, condition_issues))
+    if not pairwise:
+        return []
+    write_csv(output / "level2" / "pairwise_similarity.csv", pairwise)
+    write_csv(output / "level2" / "issue_summary.csv", issues)
+    write_csv(output / "level2" / "metric_spread.csv", spread)
+    summary = condition_summary(issues, pairwise)
+    write_csv(output / "summary" / "level2_summary.csv", summary)
+    for folder in ("issue_comparisons", "patch_comparisons"):
+        (output / "level2" / folder).mkdir(parents=True, exist_ok=True)
+    for (condition, instance), runs in by_task.items():
+        pairs = [p for p in pairwise if (p["condition"], p["instance_id"]) == (condition, instance)]
+        if not pairs:
+            continue
+        task_spread = [s for s in spread if (s["condition"], s["instance_id"]) == (condition, instance)]
+        name = f"{condition}__{instance}.md"
+        (output / "level2" / "issue_comparisons" / name).write_text(issue_report(runs, pairs, task_spread))
+        (output / "level2" / "patch_comparisons" / name).write_text(patch_report(runs, pairs))
+    return summary
+
+
 @app.command()
 def main(
     condition_dirs: list[Path] = typer.Argument(..., help="Condition folders (seed runs inside) or single run folders"),
@@ -371,13 +408,20 @@ def main(
     if not profiles:
         raise typer.BadParameter("No runs (preds.json) found")
     write_level1(profiles, output)
+    summary = write_level2(profiles, output)
     rows = [row for row, _ in profiles]
     parts = [p for _, turns in profiles for t in turns for p in t.parts]
     unknown = sum(p.category == "Unknown" for p in parts)
     print(f"{len(rows)} runs, {sum(r['turns'] for r in rows)} turns, {len(parts)} command parts ({unknown} unknown)")
     for c in CATEGORIES:
         print(f"  {c:<12} {mean(r[c.lower() + '_ratio'] for r in rows):.1%} of turns")
-    print(f"Wrote {output / 'level1'} and {output / 'summary'}")
+    for c in summary:
+        print(
+            f"{c['condition']}: {c['tasks']} tasks, {c['pairs']} run pairs; same outcome in {c['same_outcome_pairs']} pairs, "
+            f"identical action sequence in {c['identical_sequence_pairs']}, identical patch in {c['identical_patch_pairs']}; "
+            f"mean sequence similarity {c['mean_sequence_similarity']:.2f}, patch text similarity {c['mean_patch_text_similarity']:.2f}"
+        )
+    print(f"Wrote {output / 'level1'}, {output / 'level2'} and {output / 'summary'}")
 
 
 if __name__ == "__main__":
