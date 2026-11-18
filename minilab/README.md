@@ -41,6 +41,7 @@ minilab/
 │   ├── compare.py            Level 2: repeated runs of a task compared (sequences, files, patches, metric spread)
 │   ├── figures.py            SVG helpers and palette; timelines and similarity heatmap
 │   ├── plots.py              the other SVG plots (phases, transitions, errors, outcome, spread, path vs code, ...)
+│   ├── patch_view.py         GitHub-style HTML pages comparing every run's patch with the reference fix
 │   ├── measures.py           outcome, compute and process measures of one trajectory
 │   └── report.py             per-task table, per-condition summary, paired comparisons vs the baseline
 ├── modules/                  research modules (Requirements, Planning, Testing, Review); registry in __init__.py
@@ -254,6 +255,28 @@ the output: `command_not_found`, `timeout`, `syntax_error`, `import_error`, `tes
 Navigation is almost never a turn's category in mini, because `cd` is always chained with another command.
 Explored files are path-like arguments of exploration commands (approximate); modified files come from the patch.
 Check the rules once on a sample of `classification_audit.csv` before relying on them for a new model.
+
+## Patch pages
+
+GitHub-style pages to read and compare the patches of repeated runs, with the reference (gold) fix from the dataset:
+
+```bash
+python -m minilab.analysis.patch_view runs/<model>/b0__<id> --subset data/SWE-bench-Live --split lite -o runs/analysis/patches
+```
+
+Open `runs/analysis/patches/index.html` in a browser (no internet needed). Each task page has:
+
+| Part | Content |
+|---|---|
+| Header | repository and **base commit** (links to GitHub), condition, the issue text |
+| Summary | per patch (reference fix, then each run): outcome, exit status, turns, cost, files, +/- lines, identical patches, failed tests |
+| Patches | each patch as a diff, **Unified** or **Split** view; identical patches are collapsed; every changed line is tagged with how many runs wrote it and `= ref` when the reference fix has it; each file links to its version at the base commit |
+| Side by side, per file | all patches that touch a file next to each other |
+| Changed lines that differ | for every pair (reference and runs), the changed lines only one of them has |
+| Evaluation | the tests that must pass after the fix, the failed tests of each run, and the evaluation test changes |
+
+Without `--subset` the pages have no reference fix or test lists. The reference fix and evaluation tests are shown for
+analysis only; modules never see them (`minilab.core.check` checks this).
 
 ## Changes to the original code
 
