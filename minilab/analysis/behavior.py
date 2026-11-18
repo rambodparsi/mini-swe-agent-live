@@ -21,7 +21,20 @@ from minilab.analysis.actions import Part, classify_command, error_type, turn_ca
 from minilab.analysis.compare import compare_all, condition_summary, groups, issue_report, patch_report
 from minilab.analysis.figures import similarity_svg, timelines_svg
 from minilab.analysis.measures import patch_stats
-from minilab.analysis.report import resolved_ids, run_dirs
+from minilab.analysis.plots import (
+    SHIFT_MEASURES,
+    agreement_rows,
+    agreement_svg,
+    effect_svg,
+    errors_svg,
+    outcome_svg,
+    path_code_svg,
+    phases_svg,
+    shift_svg,
+    spread_svg,
+    transitions_svg,
+)
+from minilab.analysis.report import paired, per_task, resolved_ids, run_dirs
 
 app = typer.Typer(add_completion=False)
 CATEGORIES = ["Exploration", "Modification", "Test", "Navigation", "Utility", "Unknown"]
@@ -366,19 +379,66 @@ def write_level1(profiles: list[tuple[dict, list[Turn]]], output: Path) -> None:
     (output / "summary" / "thresholds.json").write_text(json.dumps(thresholds, indent=2))
 
 
-def write_level2(profiles: list[tuple[dict, list[Turn]]], output: Path) -> list[dict]:
-    pairwise, issues, spread = compare_all(profiles)
-    by_task = groups(profiles)
+def write_figures(
+    profiles: list[tuple[dict, list[Turn]]], pairwise: list[dict], issues: list[dict], output: Path, baseline: str
+) -> None:
+    """Every figure: per condition (Levels 1 and 2), and conditions vs. the baseline when there are several."""
     figures = output / "summary" / "figures"
     figures.mkdir(parents=True, exist_ok=True)
-    for condition in dict.fromkeys(c for c, _ in by_task):
-        tasks = [[r for r, _ in runs] for (c, _), runs in by_task.items() if c == condition]
-        turns = {
-            (r["instance_id"], r["seed"]): t for (c, _), runs in by_task.items() if c == condition for r, t in runs
+    by_task = groups(profiles)
+    conditions = list(dict.fromkeys(r["condition"] for r, _ in profiles))
+    agreement = []
+    for condition in conditions:
+        mine = [(r, t) for r, t in profiles if r["condition"] == condition]
+        rows, runs = [r for r, _ in mine], [t for _, t in mine]
+        tasks = [[r for r, _ in group] for (c, _), group in by_task.items() if c == condition]
+        turns = {(r["instance_id"], r["seed"]): t for r, t in mine}
+        drawings = {
+            "timelines": timelines_svg(condition, tasks, turns),
+            "phases": phases_svg(condition, runs),
+            "transitions": transitions_svg(condition, runs),
+            "errors": errors_svg(condition, rows),
+            "spread": spread_svg(condition, tasks),
         }
-        (figures / f"{condition}__timelines.svg").write_text(timelines_svg(condition, tasks, turns))
-        if condition_issues := [i for i in issues if i["condition"] == condition]:
-            (figures / f"{condition}__similarity.svg").write_text(similarity_svg(condition, condition_issues))
+        if any(r["resolved"] is not None for r in rows):
+            drawings["outcome"] = outcome_svg(condition, rows)
+        if condition_pairs := [p for p in pairwise if p["condition"] == condition]:
+            drawings["similarity"] = similarity_svg(condition, [i for i in issues if i["condition"] == condition])
+            drawings["path_vs_code"] = path_code_svg(condition, condition_pairs)
+            repeated = [group for group in tasks if len(group) > 1]
+            agreement += agreement_rows(repeated)
+            drawings["agreement"] = agreement_svg(condition, agreement_rows(repeated))
+        for name, drawing in drawings.items():
+            (figures / f"{condition}__{name}.svg").write_text(drawing)
+    if agreement:
+        write_csv(output / "level2" / "changed_line_agreement.csv", agreement)
+    if len(conditions) < 2:
+        return
+    rows = [r for r, _ in profiles]
+    base = [r for r in rows if r["condition"] == baseline]
+    means = {
+        c: {key: mean([float(r[key]) for r in rows if r["condition"] == c and r.get(key) is not None] or [math.nan])
+            for key, _ in SHIFT_MEASURES}
+        for c in conditions
+    }  # fmt: skip
+    means = {c: {k: (None if math.isnan(v) else v) for k, v in m.items()} for c, m in means.items()}
+    (figures / f"process_shift__{baseline}.svg").write_text(shift_svg([baseline] + [c for c in conditions if c != baseline], means))  # fmt: skip
+    for condition in conditions:
+        treated = [r for r in rows if r["condition"] == condition]
+        overall = paired(base, treated, "resolved")
+        if condition == baseline or not overall["tasks"]:
+            continue
+        b, t = per_task(base, "resolved"), per_task(treated, "resolved")
+        diffs = [(task, t[task] - b[task]) for task in sorted(b.keys() & t.keys())]
+        (figures / f"effect__{condition}__vs__{baseline}.svg").write_text(
+            effect_svg(baseline, condition, diffs, overall)
+        )
+
+
+def write_level2(
+    profiles: list[tuple[dict, list[Turn]]], pairwise: list[dict], issues: list[dict], spread: list[dict], output: Path
+) -> list[dict]:
+    by_task = groups(profiles)
     if not pairwise:
         return []
     write_csv(output / "level2" / "pairwise_similarity.csv", pairwise)
@@ -399,16 +459,32 @@ def write_level2(profiles: list[tuple[dict, list[Turn]]], output: Path) -> list[
     return summary
 
 
+def baseline_name(condition_dirs: list[Path], baseline: str) -> str:
+    names = [d.name for d in condition_dirs]
+    matches = [n for n in names if baseline in (n, n.split("__")[0])]
+    if len(names) > 1 and len(matches) != 1:
+        raise typer.BadParameter(f"Baseline {baseline!r} must match exactly one condition folder, matched {matches}")
+    return matches[0] if matches else names[0]
+
+
 @app.command()
 def main(
     condition_dirs: list[Path] = typer.Argument(..., help="Condition folders (seed runs inside) or single run folders"),
     output: Path = typer.Option(Path("runs/analysis/behavior"), "-o", "--output", help="Output folder"),
+    baseline: str = typer.Option(
+        "b0",
+        "--baseline",
+        help="Condition to compare against (folder name, or its part before '__'); used with 2+ conditions",
+    ),
 ) -> None:
+    baseline = baseline_name(condition_dirs, baseline)
     profiles = collect(condition_dirs)
     if not profiles:
         raise typer.BadParameter("No runs (preds.json) found")
+    pairwise, issues, spread = compare_all(profiles)
     write_level1(profiles, output)
-    summary = write_level2(profiles, output)
+    summary = write_level2(profiles, pairwise, issues, spread, output)
+    write_figures(profiles, pairwise, issues, output, baseline)
     rows = [row for row, _ in profiles]
     parts = [p for _, turns in profiles for t in turns for p in t.parts]
     unknown = sum(p.category == "Unknown" for p in parts)
@@ -421,7 +497,7 @@ def main(
             f"identical action sequence in {c['identical_sequence_pairs']}, identical patch in {c['identical_patch_pairs']}; "
             f"mean sequence similarity {c['mean_sequence_similarity']:.2f}, patch text similarity {c['mean_patch_text_similarity']:.2f}"
         )
-    print(f"Wrote {output / 'level1'}, {output / 'level2'} and {output / 'summary'}")
+    print(f"Wrote {output / 'level1'}, {output / 'level2'} and {output / 'summary'} (figures in summary/figures)")
 
 
 if __name__ == "__main__":

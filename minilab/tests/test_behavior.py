@@ -208,7 +208,7 @@ def test_behavior_cli_on_runs_is_complete_and_deterministic(tmp_path):
         ("repo__x-1", "s1", "s2", "False"),
         ("repo__x-2", "s1", "s2", "True"),
     ]
-    assert {f.name for f in (outs[0] / "summary" / "figures").iterdir()} == {
+    assert {f.name for f in (outs[0] / "summary" / "figures").iterdir()} >= {
         "b0__abc__timelines.svg",
         "b0__abc__similarity.svg",
     }
