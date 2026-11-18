@@ -39,7 +39,8 @@ minilab/
 │   ├── actions.py            action classification (paper's Table 1) and error detection, deterministic rules
 │   ├── behavior.py           behavior analysis command; Level 1 profile per run (Table 2, CFG features, P1-P7)
 │   ├── compare.py            Level 2: repeated runs of a task compared (sequences, files, patches, metric spread)
-│   ├── figures.py            SVG figures (timelines, similarity heatmap), no plotting dependency
+│   ├── figures.py            SVG helpers and palette; timelines and similarity heatmap
+│   ├── plots.py              the other SVG plots (phases, transitions, errors, outcome, spread, path vs code, ...)
 │   ├── measures.py           outcome, compute and process measures of one trajectory
 │   └── report.py             per-task table, per-condition summary, paired comparisons vs the baseline
 ├── modules/                  research modules (Requirements, Planning, Testing, Review); registry in __init__.py
@@ -173,6 +174,7 @@ Cross-Framework Behavioral Analysis of Software Engineering Agents* (no LLM judg
 
 ```bash
 python -m minilab.analysis.behavior runs/<model>/<condition> [more conditions] -o runs/analysis/behavior
+python -m minilab.analysis.behavior runs/<model>/b0__<id> runs/<model>/p1__<id> --baseline b0 -o runs/analysis/p1
 ```
 
 | Output | Content |
@@ -189,8 +191,27 @@ python -m minilab.analysis.behavior runs/<model>/<condition> [more conditions] -
 | `level2/issue_comparisons/<condition>__<task>.md` | timelines side by side, metrics per run, pairwise table, files |
 | `level2/patch_comparisons/<condition>__<task>.md` | changed lines only in one run of each pair, and every run's patch |
 | `summary/level2_summary.csv` | per condition: pairs with the same outcome, identical sequence or patch, mean similarities |
-| `summary/figures/<condition>__timelines.svg` | every run as a row of turns colored and lettered by category, errors outlined |
-| `summary/figures/<condition>__similarity.svg` | tasks x similarity measures heatmap with values (open in a browser) |
+| `level2/changed_line_agreement.csv` | per task: distinct changed lines written by all runs, by some, by one (table behind the agreement figure) |
+
+**Figures** (`summary/figures/`, SVG: open in a browser, hover for values; every value is also printed or in a CSV):
+
+| File | Question |
+|---|---|
+| `<condition>__timelines.svg` | How did each run go? Every run as a row of turns, colored and lettered by category, errors outlined |
+| `<condition>__phases.svg` | Does the agent work in phases? Share of each category by position in the run (10 bins) |
+| `<condition>__transitions.svg` | What follows what? Counts of category → next category, with the start and end of runs |
+| `<condition>__errors.svg` | What goes wrong? Error turns by type and in how many runs |
+| `<condition>__outcome.svg` | Do resolved runs behave differently? Turns, cost, files explored, lines added; one dot per run (descriptive only) |
+| `<condition>__spread.svg` | How much do repeated runs vary? Turns and cost of every run per task (separate axes) |
+| `<condition>__similarity.svg` | How similar are repeated runs? Tasks x similarity measures |
+| `<condition>__path_vs_code.svg` | Does a similar path give similar code? One point per run pair |
+| `<condition>__agreement.svg` | How much code do repeated runs share? Changed lines written by all / some / one run |
+| `effect__<condition>__vs__<baseline>.svg` | With 2+ conditions: change in solve rate per task, and overall with 95% bootstrap interval |
+| `process_shift__<baseline>.svg` | With 2+ conditions: process measures and pattern rates per condition (did the module change the behavior it targets?) |
+
+Colors follow a validated palette (categories: blue, orange, aqua, then grays; magnitudes: one blue ramp); identity
+is never carried by color alone (letters, values, shapes, legends). With more than three conditions the process-shift
+colors are no longer guaranteed distinguishable for color-blind readers; use `summary/overall_summary.csv` then.
 
 **Turns and categories.** A turn is one model call with its command and result. Commands are split into parts
 (`&&`, `||`, `;`, `|`, `&`, newlines; quotes, `$(...)` and here-documents are kept intact). Each part gets one of the
