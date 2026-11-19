@@ -1,0 +1,36 @@
+diff --git a/arviz/plots/hdiplot.py b/arviz/plots/hdiplot.py
+index 196a1f53..59f0f76c 100644
+--- a/arviz/plots/hdiplot.py
++++ b/arviz/plots/hdiplot.py
+@@ -35,7 +35,7 @@ def plot_hdi(
+     Parameters
+     ----------
+     x : array-like
+-        Values to plot.
++        Values to plot. Categorical (string) values are not supported.
+     y : array-like, optional
+         Values from which to compute the HDI. Assumed shape ``(chain, draw, \*shape)``.
+         Only optional if ``hdi_data`` is present.
+@@ -81,6 +81,11 @@ def plot_hdi(
+     -------
+     axes : matplotlib axes or bokeh figures
+ 
++    Raises
++    ------
++    TypeError
++        If ``x`` contains categorical (string) values.
++
+     See Also
+     --------
+     hdi : Calculate highest density interval (HDI) of array for given probability.
+@@ -134,6 +139,10 @@ def plot_hdi(
+         hdi_kwargs = {}
+ 
+     x = np.asarray(x)
++    if x.dtype.kind in "US" or (
++        x.dtype.kind == "O" and any(isinstance(value, (str, bytes)) for value in x.flat)
++    ):
++        raise TypeError("Categorical (string) values are not supported for x in plot_hdi.")
+     x_shape = x.shape
+ 
+     if y is None and hdi_data is None:

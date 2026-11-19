@@ -1,0 +1,49 @@
+diff --git a/Lib/fontTools/ttLib/reorderGlyphs.py b/Lib/fontTools/ttLib/reorderGlyphs.py
+index 3221261f1..89f42be1c 100644
+--- a/Lib/fontTools/ttLib/reorderGlyphs.py
++++ b/Lib/fontTools/ttLib/reorderGlyphs.py
+@@ -244,6 +244,7 @@ def _traverse_ot_data(
+ 
+ 
+ def reorderGlyphs(font: ttLib.TTFont, new_glyph_order: List[str]):
++    """Reorder glyphs, keeping ``.notdef`` first if it is present."""
+     old_glyph_order = font.getGlyphOrder()
+     if len(new_glyph_order) != len(old_glyph_order):
+         raise ValueError(
+@@ -258,6 +259,12 @@ def reorderGlyphs(font: ttLib.TTFont, new_glyph_order: List[str]):
+             f"* only in old: {set(old_glyph_order) - set(new_glyph_order)}"
+         )
+ 
++    # Glyph ID 0 is reserved for the missing-glyph outline.
++    if ".notdef" in new_glyph_order and new_glyph_order[0] != ".notdef":
++        new_glyph_order = [".notdef"] + [
++            name for name in new_glyph_order if name != ".notdef"
++        ]
++
+     # Changing the order of glyphs in a TTFont requires that all tables that use
+     # glyph indexes have been fully.
+     # Cf. https://github.com/fonttools/fonttools/issues/2060
+@@ -276,3 +283,23 @@ def reorderGlyphs(font: ttLib.TTFont, new_glyph_order: List[str]):
+                 reorder_key = (type(value), getattr(value, "Format", None))
+                 for reorder in _REORDER_RULES.get(reorder_key, []):
+                     reorder.apply(font, value)
++
++    if "CFF " in font:
++        top_dict = font["CFF "].cff.topDictIndex[0]
++        charstrings = top_dict.CharStrings
++        # Load the outlines before changing any glyph-indexed data, including
++        # the FDSelect used to select each CID-keyed glyph's private dict.
++        outlines = [charstrings[name] for name in new_glyph_order]
++        if hasattr(top_dict, "FDSelect") and len(top_dict.FDSelect):
++            old_fd_select = dict(zip(top_dict.charset, top_dict.FDSelect.gidArray))
++            top_dict.FDSelect.gidArray = [
++                old_fd_select[name] for name in new_glyph_order
++            ]
++        if charstrings.charStringsAreIndexed:
++            charstrings.charStringsIndex.items = outlines
++            charstrings.charStrings = {
++                name: i for i, name in enumerate(new_glyph_order)
++            }
++        else:
++            charstrings.charStrings = dict(zip(new_glyph_order, outlines))
++        top_dict.charset = new_glyph_order

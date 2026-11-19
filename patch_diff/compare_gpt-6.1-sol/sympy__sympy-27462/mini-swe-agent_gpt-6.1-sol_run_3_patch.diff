@@ -1,0 +1,26 @@
+diff --git a/sympy/printing/pycode.py b/sympy/printing/pycode.py
+index 9d768b8c0a..1cd99f7d44 100644
+--- a/sympy/printing/pycode.py
++++ b/sympy/printing/pycode.py
+@@ -118,6 +118,10 @@ def __init__(self, settings=None):
+         self.known_constants = dict(self._kc, **(settings or {}).get(
+             'user_constants', {}))
+ 
++    def _print_Not(self, expr):
++        PREC = precedence(expr)
++        return self._operators['not'] + ' ' + self.parenthesize(expr.args[0], PREC)
++
+     def _declare_number_const(self, name, value):
+         return "%s = %s" % (name, value)
+ 
+@@ -555,10 +559,6 @@ def _print_sign(self, e):
+         return '(0.0 if {e} == 0 else {f}(1, {e}))'.format(
+             f=self._module_format('math.copysign'), e=self._print(e.args[0]))
+ 
+-    def _print_Not(self, expr):
+-        PREC = precedence(expr)
+-        return self._operators['not'] + self.parenthesize(expr.args[0], PREC)
+-
+     def _print_IndexedBase(self, expr):
+         return expr.name
+ 

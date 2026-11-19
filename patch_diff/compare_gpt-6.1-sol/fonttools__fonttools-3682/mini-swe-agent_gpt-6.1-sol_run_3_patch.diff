@@ -1,0 +1,48 @@
+diff --git a/Lib/fontTools/ttLib/reorderGlyphs.py b/Lib/fontTools/ttLib/reorderGlyphs.py
+index 3221261f1..d1a2d3af4 100644
+--- a/Lib/fontTools/ttLib/reorderGlyphs.py
++++ b/Lib/fontTools/ttLib/reorderGlyphs.py
+@@ -244,6 +244,7 @@ def _traverse_ot_data(
+ 
+ 
+ def reorderGlyphs(font: ttLib.TTFont, new_glyph_order: List[str]):
++    """Reorder glyphs, keeping ``.notdef`` first if it is present."""
+     old_glyph_order = font.getGlyphOrder()
+     if len(new_glyph_order) != len(old_glyph_order):
+         raise ValueError(
+@@ -258,6 +259,11 @@ def reorderGlyphs(font: ttLib.TTFont, new_glyph_order: List[str]):
+             f"* only in old: {set(old_glyph_order) - set(new_glyph_order)}"
+         )
+ 
++    if ".notdef" in new_glyph_order:
++        new_glyph_order = [".notdef"] + [
++            name for name in new_glyph_order if name != ".notdef"
++        ]
++
+     # Changing the order of glyphs in a TTFont requires that all tables that use
+     # glyph indexes have been fully.
+     # Cf. https://github.com/fonttools/fonttools/issues/2060
+@@ -276,3 +282,23 @@ def reorderGlyphs(font: ttLib.TTFont, new_glyph_order: List[str]):
+                 reorder_key = (type(value), getattr(value, "Format", None))
+                 for reorder in _REORDER_RULES.get(reorder_key, []):
+                     reorder.apply(font, value)
++
++    if "CFF " in font:
++        top_dict = font["CFF "].cff.topDictIndex[0]
++        charstrings = top_dict.CharStrings
++        if charstrings.charStringsAreIndexed:
++            # Load all items before changing FDSelect so that each charstring
++            # retains the correct Private dict.
++            items = [charstrings[name] for name in new_glyph_order]
++            charstrings.charStringsIndex.items = items
++            charstrings.charStrings = {
++                name: i for i, name in enumerate(new_glyph_order)
++            }
++        else:
++            charstrings.charStrings = {
++                name: charstrings[name] for name in new_glyph_order
++            }
++        if hasattr(top_dict, "FDSelect") and len(top_dict.FDSelect):
++            old_fds = dict(zip(top_dict.charset, top_dict.FDSelect.gidArray))
++            top_dict.FDSelect.gidArray = [old_fds[name] for name in new_glyph_order]
++        top_dict.charset = new_glyph_order

@@ -1,0 +1,19 @@
+diff --git a/dvc/commands/remote.py b/dvc/commands/remote.py
+index 4b6921dd7..332e0a2c0 100644
+--- a/dvc/commands/remote.py
++++ b/dvc/commands/remote.py
+@@ -110,8 +110,12 @@ class CmdRemoteDefault(CmdRemote):
+ class CmdRemoteList(CmdRemote):
+     def run(self):
+         conf = self.config.read(self.args.level)
+-        for name, remote_conf in conf["remote"].items():
+-            ui.write(name, remote_conf["url"], sep="\t")
++        default = conf["core"].get("remote")
++        rows = [
++            (name, remote_conf["url"], "(default)" if name == default else "")
++            for name, remote_conf in conf["remote"].items()
++        ]
++        ui.table(rows)
+         return 0
+ 
+ 
