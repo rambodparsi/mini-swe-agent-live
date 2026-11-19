@@ -1,0 +1,107 @@
+diff --git a/haystack/components/preprocessors/document_splitter.py b/haystack/components/preprocessors/document_splitter.py
+index 2abdb41dd..186f145e9 100644
+--- a/haystack/components/preprocessors/document_splitter.py
++++ b/haystack/components/preprocessors/document_splitter.py
+@@ -50,7 +50,7 @@ class DocumentSplitter:
+ 
+     def __init__(  # pylint: disable=too-many-positional-arguments
+         self,
+-        split_by: Literal["function", "page", "passage", "sentence", "word"] = "word",
++        split_by: Literal["function", "page", "passage", "sentence", "word", "line"] = "word",
+         split_length: int = 200,
+         split_overlap: int = 0,
+         split_threshold: int = 0,
+@@ -61,7 +61,7 @@ class DocumentSplitter:
+ 
+         :param split_by: The unit for splitting your documents. Choose from `word` for splitting by spaces (" "),
+             `sentence` for splitting by periods ("."), `page` for splitting by form feed ("\\f"),
+-            or `passage` for splitting by double line breaks ("\\n\\n").
++            `passage` for splitting by double line breaks ("\\n\\n") or `line` for splitting each line ("\\n").
+         :param split_length: The maximum number of units in each split.
+         :param split_overlap: The number of overlapping units for each split.
+         :param split_threshold: The minimum number of units per split. If a split has fewer units
+@@ -72,8 +72,8 @@ class DocumentSplitter:
+         """
+ 
+         self.split_by = split_by
+-        if split_by not in ["function", "page", "passage", "sentence", "word"]:
+-            raise ValueError("split_by must be one of 'word', 'sentence', 'page' or 'passage'.")
++        if split_by not in ["function", "page", "passage", "sentence", "word", "line"]:
++            raise ValueError("split_by must be one of 'word', 'sentence', 'page', 'passage' or 'line'.")
+         if split_by == "function" and splitting_function is None:
+             raise ValueError("When 'split_by' is set to 'function', a valid 'splitting_function' must be provided.")
+         if split_length <= 0:
+@@ -129,7 +129,7 @@ class DocumentSplitter:
+         return {"documents": split_docs}
+ 
+     def _split_into_units(
+-        self, text: str, split_by: Literal["function", "page", "passage", "sentence", "word"]
++        self, text: str, split_by: Literal["function", "page", "passage", "sentence", "word", "line"]
+     ) -> List[str]:
+         if split_by == "page":
+             self.split_at = "\f"
+@@ -139,11 +139,14 @@ class DocumentSplitter:
+             self.split_at = "."
+         elif split_by == "word":
+             self.split_at = " "
++        elif split_by == "line":
++            self.split_at = "\n"
+         elif split_by == "function" and self.splitting_function is not None:
+             return self.splitting_function(text)
+         else:
+             raise NotImplementedError(
+-                "DocumentSplitter only supports 'function', 'page', 'passage', 'sentence' or 'word' split_by options."
++                """DocumentSplitter only supports 'function', 'line', 'page',
++                   'passage', 'sentence' or 'word' split_by options."""
+             )
+         units = text.split(self.split_at)
+         # Add the delimiter back to all units except the last one
+diff --git a/releasenotes/notes/feat-split-by-line-splitter-aa804cb2346c6ed9.yaml b/releasenotes/notes/feat-split-by-line-splitter-aa804cb2346c6ed9.yaml
+new file mode 100644
+index 000000000..f10de8743
+--- /dev/null
++++ b/releasenotes/notes/feat-split-by-line-splitter-aa804cb2346c6ed9.yaml
+@@ -0,0 +1,4 @@
++---
++enhancements:
++  - |
++    Added split by line to DocumentSplitter, which will split the document at \n
+diff --git a/test/components/preprocessors/test_document_splitter.py b/test/components/preprocessors/test_document_splitter.py
+index aecb85317..b21dcbf7d 100644
+--- a/test/components/preprocessors/test_document_splitter.py
++++ b/test/components/preprocessors/test_document_splitter.py
+@@ -56,7 +56,9 @@ class TestDocumentSplitter:
+         assert res == {"documents": []}
+ 
+     def test_unsupported_split_by(self):
+-        with pytest.raises(ValueError, match="split_by must be one of 'word', 'sentence', 'page' or 'passage'."):
++        with pytest.raises(
++            ValueError, match="split_by must be one of 'word', 'sentence', 'page', 'passage' or 'line'."
++        ):
+             DocumentSplitter(split_by="unsupported")
+ 
+     def test_unsupported_split_length(self):
+@@ -214,6 +216,23 @@ class TestDocumentSplitter:
+         assert docs[1].meta["_split_overlap"][0]["range"] == (38, 43)
+         assert docs[0].content[38:43] == "is a "
+ 
++    def test_split_by_line(self):
++        splitter = DocumentSplitter(split_by="line", split_length=1)
++        text = "This is a text with some words.\nThere is a second sentence.\nAnd there is a third sentence."
++        result = splitter.run(documents=[Document(content=text)])
++        docs = result["documents"]
++
++        assert len(docs) == 3
++        assert docs[0].content == "This is a text with some words.\n"
++        assert docs[0].meta["split_id"] == 0
++        assert docs[0].meta["split_idx_start"] == text.index(docs[0].content)
++        assert docs[1].content == "There is a second sentence.\n"
++        assert docs[1].meta["split_id"] == 1
++        assert docs[1].meta["split_idx_start"] == text.index(docs[1].content)
++        assert docs[2].content == "And there is a third sentence."
++        assert docs[2].meta["split_id"] == 2
++        assert docs[2].meta["split_idx_start"] == text.index(docs[2].content)
++
+     def test_source_id_stored_in_metadata(self):
+         splitter = DocumentSplitter(split_by="word", split_length=10)
+         doc1 = Document(content="This is a text with some words.")

@@ -1,0 +1,179 @@
+diff --git a/CHANGELOG.rst b/CHANGELOG.rst
+index e5519fc..753722f 100644
+--- a/CHANGELOG.rst
++++ b/CHANGELOG.rst
+@@ -6,7 +6,8 @@
+ - Fix possible ``ValueError`` raised on Windows when system clock was set far ahead in the future (`#1291 <https://github.com/Delgan/loguru/issues/1291>`_).
+ - Allow the ``rotation`` argument of file sinks to accept a list of rotation conditions, any of which can trigger the rotation (`#1174 <https://github.com/Delgan/loguru/issues/1174>`_, thanks `@CollinHeist <https://github.com/CollinHeist>`_).
+ - Update the default log format to include the timezone offset since it produces less ambiguous logs (`#856 <https://github.com/Delgan/loguru/pull/856>`_, thanks `@tim-x-y-z <https://github.com/tim-x-y-z>`_).
+-- Honor the ``NO_COLOR`` environment variable to disable color output by default if ``colorize`` is not provided (`#1178 <https://github.com/Delgan/loguru/issues/1178>`_).
++- Honor the ``NO_COLOR`` environment variable which disables color output by default if ``colorize`` is not provided (`#1178 <https://github.com/Delgan/loguru/issues/1178>`_).
++- Honor the ``FORCE_COLOR`` environment variable which enables color output by default if ``colorize`` is not provided (`#1305 <https://github.com/Delgan/loguru/issues/1305>`_, thanks `@nhurden <https://github.com/nhurden>`_).
+ - Add requirement for ``TERM`` environment variable not to be ``"dumb"`` to enable colorization (`#1287 <https://github.com/Delgan/loguru/pull/1287>`_, thanks `@snosov1 <https://github.com/snosov1>`_).
+ - Make ``logger.catch()`` usable as an asynchronous context manager (`#1084 <https://github.com/Delgan/loguru/issues/1084>`_).
+ - Make ``logger.catch()`` compatible with asynchronous generators (`#1302 <https://github.com/Delgan/loguru/issues/1302>`_).
+diff --git a/loguru/_colorama.py b/loguru/_colorama.py
+index b380536..220ddd8 100644
+--- a/loguru/_colorama.py
++++ b/loguru/_colorama.py
+@@ -7,9 +7,16 @@ def should_colorize(stream):
+     if stream is None:
+         return False
+ 
+-    if "NO_COLOR" in os.environ:
++    # Per the spec (https://no-color.org/), this needs to check for a
++    # non-empty string, not just presence of the variable:
++    if os.getenv("NO_COLOR"):
+         return False
+ 
++    # Per the spec (https://force-color.org/), this needs to check for a
++    # non-empty string, not just presence of the variable:
++    if os.getenv("FORCE_COLOR"):
++        return True
++
+     if getattr(builtins, "__IPYTHON__", False) and (stream is sys.stdout or stream is sys.stderr):
+         try:
+             import ipykernel
+diff --git a/loguru/_logger.py b/loguru/_logger.py
+index e543469..87dace1 100644
+--- a/loguru/_logger.py
++++ b/loguru/_logger.py
+@@ -83,6 +83,15 @@
+ 
+ .. _formatting directives: https://docs.python.org/3/library/string.html#format-string-syntax
+ .. _reentrant: https://en.wikipedia.org/wiki/Reentrancy_(computing)
++
++.. _ANSI codes: https://en.wikipedia.org/wiki/ANSI_escape_code
++
++.. |NO_COLOR| replace:: ``NO_COLOR``
++.. _NO_COLOR: https://no-color.org/
++
++.. |FORCE_COLOR| replace:: ``FORCE_COLOR``
++.. _FORCE_COLOR: https://force-color.org/
++
+ """
+ 
+ import builtins
+@@ -663,13 +672,17 @@ class Logger:
+ 
+         .. rubric:: The color markups
+ 
+-        To add colors to your logs, you just have to enclose your format string with the appropriate
+-        tags (e.g. ``<red>some message</red>``). These tags are automatically removed if the sink
+-        doesn't support ansi codes. For convenience, you can use ``</>`` to close the last opening
+-        tag without repeating its name (e.g. ``<red>another message</>``).
+-
+-        The special tag ``<level>`` (abbreviated with ``<lvl>``) is transformed according to
+-        the configured color of the logged message level.
++        When the sink supports it, the logs can be colored by using markups in the format string.
++        By default (when ``colorize`` is not specified), these are automatically converted or
++        removed depending on the sink's support for `ANSI codes`_. Loguru also honors the
++        |NO_COLOR|_ and |FORCE_COLOR|_ environment variables (the former taking precedence over the
++        latter).
++
++        To add colors, you just have to enclose your format string with the appropriate tags
++        (e.g. ``<red>some message</red>``). For convenience, you can use ``</>`` to close the last
++        opening tag without repeating its name (e.g. ``<red>another message</>``). The special tag
++        ``<level>`` (abbreviated with ``<lvl>``) is transformed according to the configured color
++        of the logged message level.
+ 
+         Tags which are not recognized will raise an exception during parsing, to inform you about
+         possible misuse. If you wish to display a markup tag literally, you can escape it by
+diff --git a/tests/test_add_option_colorize.py b/tests/test_add_option_colorize.py
+index 47d0071..5b22e69 100644
+--- a/tests/test_add_option_colorize.py
++++ b/tests/test_add_option_colorize.py
+@@ -84,3 +84,12 @@ def test_override_no_color(monkeypatch):
+         logger.add(stream, format="<blue>{message}</blue>", colorize=True)
+         logger.debug("Message", colorize=False)
+         assert stream.getvalue() == parse("<blue>Message</blue>\n")
++
++
++def test_override_force_color(monkeypatch):
++    stream = StreamIsattyFalse()
++    with monkeypatch.context() as context:
++        context.setitem(os.environ, "FORCE_COLOR", "1")
++        logger.add(stream, format="<blue>{message}</blue>", colorize=False)
++        logger.debug("Message", colorize=False)
++        assert stream.getvalue() == "Message\n"
+diff --git a/tests/test_colorama.py b/tests/test_colorama.py
+index ab659e0..53e5b0e 100644
+--- a/tests/test_colorama.py
++++ b/tests/test_colorama.py
+@@ -154,23 +154,68 @@ def test_dumb_term_not_colored(monkeypatch, patched, expected):
+ 
+ 
+ @pytest.mark.parametrize(
+-    ("patched", "expected"),
++    ("patched", "no_color", "expected"),
+     [
+-        ("__stdout__", False),
+-        ("__stderr__", False),
+-        ("stdout", False),
+-        ("stderr", False),
+-        ("", False),
++        ("__stdout__", "1", False),
++        ("__stderr__", "1", False),
++        ("stdout", "1", False),
++        ("stderr", "1", False),
++        ("", "1", False),
++        # An empty value for NO_COLOR should not be applied:
++        ("__stdout__", "", True),
++        ("__stderr__", "", True),
++        ("stdout", "", True),
++        ("stderr", "", True),
++        ("", "", True),
+     ],
+ )
+-def test_honor_no_color_standard(monkeypatch, patched, expected):
++def test_honor_no_color_standard(monkeypatch, patched, no_color, expected):
+     stream = StreamIsattyTrue()
+     with monkeypatch.context() as context:
+-        context.setitem(os.environ, "NO_COLOR", "1")
++        context.setitem(os.environ, "NO_COLOR", no_color)
++        context.setattr(sys, patched, stream, raising=False)
++        assert should_colorize(stream) is expected
++
++
++@pytest.mark.parametrize(
++    ("patched", "force_color", "expected"),
++    [
++        ("__stdout__", "1", True),
++        ("__stderr__", "1", True),
++        ("stdout", "1", True),
++        ("stderr", "1", True),
++        ("", "1", True),
++        # An empty value for FORCE_COLOR should not be applied:
++        ("__stdout__", "", False),
++        ("__stderr__", "", False),
++        ("stdout", "", False),
++        ("stderr", "", False),
++        ("", "", False),
++    ],
++)
++def test_honor_force_color_standard(monkeypatch, patched, force_color, expected):
++    stream = StreamIsattyFalse()
++    with monkeypatch.context() as context:
++        context.setitem(os.environ, "FORCE_COLOR", force_color)
+         context.setattr(sys, patched, stream, raising=False)
+         assert should_colorize(stream) is expected
+ 
+ 
++def test_no_color_takes_precedence_over_force_color(monkeypatch):
++    stream_tty = StreamIsattyTrue()
++    stream_not_tty = StreamIsattyFalse()
++
++    with monkeypatch.context() as context:
++        context.setitem(os.environ, "NO_COLOR", "1")
++        context.setitem(os.environ, "FORCE_COLOR", "1")
++
++        context.setattr(sys, "__stderr__", stream_tty, raising=False)
++        assert not should_colorize(stream_tty)
++
++        context.setattr(sys, "__stderr__", stream_not_tty, raising=False)
++        assert not should_colorize(stream_not_tty)
++
++
+ @pytest.mark.parametrize(
+     ("patched", "expected"),
+     [
