@@ -278,6 +278,26 @@ Open `runs/analysis/patches/index.html` in a browser (no internet needed). Each 
 Without `--subset` the pages have no reference fix or test lists. The reference fix and evaluation tests are shown for
 analysis only; modules never see them (`minilab.core.check` checks this).
 
+## Patch files next to other agents
+
+Puts, per task, the patch of each of our runs, the reference (gold) patch and other agents' patches in one folder,
+outside `runs/` so it can be committed:
+
+```bash
+mkdir -p data/others/tianxicode-deepseek-flash
+for f in preds.json results.json; do
+  curl -L -o data/others/tianxicode-deepseek-flash/$f \
+    https://raw.githubusercontent.com/SWE-bench-Live/submission/main/submissions/lite/tianxicode/deepseek-flash/$f
+done
+python -m minilab.scripts.compare_patches gpt-6.1-sol \
+    --other TianxiCode-DeepSeek-Flash=data/others/tianxicode-deepseek-flash/preds.json
+```
+
+This writes `patch_diff/compare_gpt-6.1-sol/<instance>/` with `mini-swe-agent_gpt-6.1-sol_run_<k>_patch.diff`,
+`reference_patch.diff` and `TianxiCode-DeepSeek-Flash_patch.diff`, plus a `README.md` table of who resolved each task
+(from each source's `results.json`). It uses the newest `b0__*` folder of the model (`--experiment` to change);
+`--other` can be repeated.
+
 ## Changes to the original code
 
 Every change to files outside `minilab/` is listed here.
