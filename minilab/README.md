@@ -284,17 +284,19 @@ Puts, per task, the patch of each of our runs, the reference (gold) patch and ot
 outside `runs/` so it can be committed:
 
 ```bash
-mkdir -p data/others/tianxicode-deepseek-flash
-for f in preds.json results.json; do
-  curl -L -o data/others/tianxicode-deepseek-flash/$f \
-    https://raw.githubusercontent.com/SWE-bench-Live/submission/main/submissions/lite/tianxicode/deepseek-flash/$f
+SUB=https://raw.githubusercontent.com/SWE-bench-Live/submission/main/submissions/lite
+for d in tianxicode/deepseek-flash sapient-slingshot-agent/v3.4.0/gpt-5.6-sol agav/gpt-5.5; do
+  mkdir -p data/others/$d
+  for f in preds.json results.json; do curl -L -o data/others/$d/$f $SUB/$d/$f; done
 done
 python -m minilab.scripts.compare_patches gpt-6.1-sol \
-    --other TianxiCode-DeepSeek-Flash=data/others/tianxicode-deepseek-flash/preds.json
+    --other TianxiCode-DeepSeek-Flash=data/others/tianxicode/deepseek-flash/preds.json \
+    --other Sapient-Slingshot-GPT-5.6-Sol=data/others/sapient-slingshot-agent/v3.4.0/gpt-5.6-sol/preds.json \
+    --other agav-GPT-5.5=data/others/agav/gpt-5.5/preds.json
 ```
 
 This writes `patch_diff/compare_gpt-6.1-sol/<instance>/` with `mini-swe-agent_gpt-6.1-sol_run_<k>_patch.diff`,
-`reference_patch.diff` and `TianxiCode-DeepSeek-Flash_patch.diff`, plus a `README.md` table of who resolved each task
+`reference_patch.diff` and one `<NAME>_patch.diff` per `--other`, plus a `README.md` table of who resolved each task
 (from each source's `results.json`). It uses the newest `b0__*` folder of the model (`--experiment` to change);
 `--other` can be repeated.
 
