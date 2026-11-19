@@ -1,0 +1,58 @@
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index 64abac286..67564e47f 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -2468,7 +2468,7 @@ class MethodDocumenter(DocstringSignatureMixin, ClassLevelDocumenter):  # type:
+                 if typ is object:
+                     pass  # default implementation. skipped.
+                 else:
+-                    if inspect.isclassmethod(func):
++                    if inspect.isclassmethod(func) and hasattr(func, '__func__'):
+                         func = func.__func__
+                     dispatchmeth = self.annotate_to_first_argument(func, typ)
+                     if dispatchmeth:
+diff --git a/sphinx/util/inspect.py b/sphinx/util/inspect.py
+index 1b06f97d8..57af99658 100644
+--- a/sphinx/util/inspect.py
++++ b/sphinx/util/inspect.py
+@@ -97,7 +97,7 @@ def unwrap_all(obj: Any, *, stop: Callable[[Any], bool] | None = None) -> Any:
+                 obj = obj.func
+             elif inspect.isroutine(obj) and hasattr(obj, '__wrapped__'):
+                 obj = obj.__wrapped__
+-            elif isclassmethod(obj) or isstaticmethod(obj):
++            elif (isclassmethod(obj) or isstaticmethod(obj)) and hasattr(obj, '__func__'):
+                 obj = obj.__func__
+             else:
+                 return obj
+@@ -108,7 +108,7 @@ def unwrap_all(obj: Any, *, stop: Callable[[Any], bool] | None = None) -> Any:
+             obj = obj.func
+         elif inspect.isroutine(obj) and hasattr(obj, '__wrapped__'):
+             obj = obj.__wrapped__
+-        elif isclassmethod(obj) or isstaticmethod(obj):
++        elif (isclassmethod(obj) or isstaticmethod(obj)) and hasattr(obj, '__func__'):
+             obj = obj.__func__
+         else:
+             return obj
+@@ -227,9 +227,9 @@ def isclassmethod(
+     name: str | None = None,
+ ) -> TypeIs[classmethod]:
+     """Check if the object is a :class:`classmethod`."""
+-    if isinstance(obj, classmethod):
++    if isinstance(obj, classmethod | ClassMethodDescriptorType):
+         return True
+-    if ismethod(obj) and obj.__self__ is not None and isclass(obj.__self__):
++    if (ismethod(obj) or inspect.isbuiltin(obj)) and isclass(obj.__self__):
+         return True
+     if cls and name:
+         # trace __mro__ if the method is defined in parent class
+@@ -682,7 +682,9 @@ def signature(
+         pass
+ 
+     if bound_method:
+-        if inspect.ismethod(subject):
++        if inspect.ismethod(subject) or (
++            inspect.isbuiltin(subject) and isclass(subject.__self__)
++        ):
+             # ``inspect.signature()`` considers the subject is a bound method and removes
+             # first argument from signature.  Therefore no skips are needed here.
+             pass

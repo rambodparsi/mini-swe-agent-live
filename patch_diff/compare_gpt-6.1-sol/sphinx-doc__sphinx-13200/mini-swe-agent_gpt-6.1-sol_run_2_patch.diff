@@ -1,0 +1,45 @@
+diff --git a/sphinx/util/inspect.py b/sphinx/util/inspect.py
+index 1b06f97d8..8e6274d7d 100644
+--- a/sphinx/util/inspect.py
++++ b/sphinx/util/inspect.py
+@@ -97,7 +97,7 @@ def unwrap_all(obj: Any, *, stop: Callable[[Any], bool] | None = None) -> Any:
+                 obj = obj.func
+             elif inspect.isroutine(obj) and hasattr(obj, '__wrapped__'):
+                 obj = obj.__wrapped__
+-            elif isclassmethod(obj) or isstaticmethod(obj):
++            elif (isclassmethod(obj) or isstaticmethod(obj)) and hasattr(obj, '__func__'):
+                 obj = obj.__func__
+             else:
+                 return obj
+@@ -108,7 +108,7 @@ def unwrap_all(obj: Any, *, stop: Callable[[Any], bool] | None = None) -> Any:
+             obj = obj.func
+         elif inspect.isroutine(obj) and hasattr(obj, '__wrapped__'):
+             obj = obj.__wrapped__
+-        elif isclassmethod(obj) or isstaticmethod(obj):
++        elif (isclassmethod(obj) or isstaticmethod(obj)) and hasattr(obj, '__func__'):
+             obj = obj.__func__
+         else:
+             return obj
+@@ -227,9 +227,9 @@ def isclassmethod(
+     name: str | None = None,
+ ) -> TypeIs[classmethod]:
+     """Check if the object is a :class:`classmethod`."""
+-    if isinstance(obj, classmethod):
++    if isinstance(obj, classmethod | ClassMethodDescriptorType):
+         return True
+-    if ismethod(obj) and obj.__self__ is not None and isclass(obj.__self__):
++    if (ismethod(obj) or inspect.isbuiltin(obj)) and isclass(obj.__self__):
+         return True
+     if cls and name:
+         # trace __mro__ if the method is defined in parent class
+@@ -682,7 +682,9 @@ def signature(
+         pass
+ 
+     if bound_method:
+-        if inspect.ismethod(subject):
++        if inspect.ismethod(subject) or (
++            inspect.isbuiltin(subject) and subject.__self__ is not None
++        ):
+             # ``inspect.signature()`` considers the subject is a bound method and removes
+             # first argument from signature.  Therefore no skips are needed here.
+             pass

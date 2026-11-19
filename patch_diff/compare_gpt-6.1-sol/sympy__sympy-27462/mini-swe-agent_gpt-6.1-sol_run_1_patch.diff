@@ -1,0 +1,13 @@
+diff --git a/sympy/printing/pycode.py b/sympy/printing/pycode.py
+index 9d768b8c0a..2c0e27f9a8 100644
+--- a/sympy/printing/pycode.py
++++ b/sympy/printing/pycode.py
+@@ -87,7 +87,7 @@ class AbstractPythonCodePrinter(CodePrinter):
+         [(k, 'math.' + v) for k, v in _known_functions_math.items()]
+     ))
+     _kc = {k: 'math.'+v for k, v in _known_constants_math.items()}
+-    _operators = {'and': 'and', 'or': 'or', 'not': 'not'}
++    _operators = {'and': 'and', 'or': 'or', 'not': 'not '}
+     _default_settings = dict(
+         CodePrinter._default_settings,
+         user_functions={},

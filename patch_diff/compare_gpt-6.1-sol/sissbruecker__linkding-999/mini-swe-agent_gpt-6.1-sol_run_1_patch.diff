@@ -1,0 +1,140 @@
+diff --git a/bookmarks/api/routes.py b/bookmarks/api/routes.py
+index 78d9c58..40e799c 100644
+--- a/bookmarks/api/routes.py
++++ b/bookmarks/api/routes.py
+@@ -103,7 +103,12 @@ class BookmarkViewSet(
+             self.get_serializer(bookmark).data if bookmark else None
+         )
+ 
+-        metadata = website_loader.load_website_metadata(url)
++        if request.GET.get("refresh") == "true":
++            # Explicit refresh must bypass the metadata cache, which normally
++            # avoids scraping twice when previewing and saving a bookmark.
++            metadata = website_loader.load_website_metadata.__wrapped__(url)
++        else:
++            metadata = website_loader.load_website_metadata(url)
+ 
+         # Return tags that would be automatically applied to the bookmark
+         profile = request.user.profile
+diff --git a/bookmarks/templates/bookmarks/form.html b/bookmarks/templates/bookmarks/form.html
+index 6245754..d984512 100644
+--- a/bookmarks/templates/bookmarks/form.html
++++ b/bookmarks/templates/bookmarks/form.html
+@@ -5,7 +5,12 @@
+   {% csrf_token %}
+   {{ form.auto_close|attr:"type:hidden" }}
+   <div class="form-group {% if form.url.errors %}has-error{% endif %}">
+-    <label for="{{ form.url.id_for_label }}" class="form-label">URL</label>
++    <div class="d-flex justify-between align-baseline">
++      <label for="{{ form.url.id_for_label }}" class="form-label">URL</label>
++      <button type="button" class="btn btn-link btn-sm" id="refresh-metadata">
++        Refresh title and description
++      </button>
++    </div>
+     <div class="has-icon-right">
+       {{ form.url|add_class:"form-input"|attr:"autofocus"|attr:"placeholder: " }}
+       <i class="form-icon loading"></i>
+@@ -15,6 +20,9 @@
+         {{ form.url.errors }}
+       </div>
+     {% endif %}
++    <div class="form-input-hint" id="metadata-error" role="alert" hidden>
++      Could not refresh website data. Please try again.
++    </div>
+     <div class="form-input-hint bookmark-exists">
+       This URL is already bookmarked.
+       The form has been pre-filled with the existing bookmark, and saving the form will update the existing bookmark.
+@@ -112,6 +120,9 @@
+       const unreadCheckbox = document.getElementById('{{ form.unread.id_for_label }}');
+       const sharedCheckbox = document.getElementById('{{ form.shared.id_for_label }}');
+       const bookmarkExistsHint = document.querySelector('.form-input-hint.bookmark-exists');
++      const refreshButton = document.getElementById('refresh-metadata');
++      const metadataError = document.getElementById('metadata-error');
++      let latestRequest = 0;
+       const editedBookmarkId = {{ form.instance.id|default:0 }};
+       let isTitleModified = !!titleInput.value;
+       let isDescriptionModified = !!descriptionInput.value;
+@@ -125,7 +136,7 @@
+         if (!input) {
+           return;
+         }
+-        input.value = value;
++        input.value = value || '';
+         input.dispatchEvent(new Event('value-changed'));
+       }
+ 
+@@ -136,20 +147,40 @@
+         input.checked = value;
+       }
+ 
+-      function checkUrl() {
+-        if (!urlInput.value) {
++      function checkUrl(refresh = false) {
++        const requestId = ++latestRequest;
++        const requestedUrl = urlInput.value;
++        metadataError.hidden = true;
++        if (!requestedUrl) {
++          toggleLoadingIcon(urlInput, false);
++          refreshButton.disabled = false;
+           return;
+         }
+ 
+         toggleLoadingIcon(urlInput, true);
++        refreshButton.disabled = true;
+ 
+-        const websiteUrl = encodeURIComponent(urlInput.value);
+-        const requestUrl = `{% url 'linkding:api-root' %}bookmarks/check?url=${websiteUrl}`;
++        const websiteUrl = encodeURIComponent(requestedUrl);
++        const requestUrl = `{% url 'linkding:api-root' %}bookmarks/check?url=${websiteUrl}${refresh ? '&refresh=true' : ''}`;
+         fetch(requestUrl)
+-          .then(response => response.json())
++          .then(response => {
++            if (!response.ok) {
++              throw new Error('Could not fetch website data');
++            }
++            return response.json();
++          })
+           .then(data => {
++            if (requestId !== latestRequest || urlInput.value !== requestedUrl) {
++              return;
++            }
+             const metadata = data.metadata;
+-            toggleLoadingIcon(urlInput, false);
++
++            // Explicit refresh replaces only title and description, not other edits.
++            if (refresh) {
++              updateInput(titleInput, metadata.title);
++              updateInput(descriptionInput, metadata.description);
++              return;
++            }
+ 
+             // Display hint if URL is already bookmarked
+             const existingBookmark = data.bookmark;
+@@ -190,13 +221,26 @@
+             } else {
+               autoTagsHint.style['display'] = 'none';
+             }
++          })
++          .catch(() => {
++            if (requestId === latestRequest && urlInput.value === requestedUrl) {
++              metadataError.hidden = false;
++            }
++          })
++          .finally(() => {
++            if (requestId === latestRequest) {
++              toggleLoadingIcon(urlInput, false);
++              refreshButton.disabled = false;
++            }
+           });
+       }
+ 
++      refreshButton.addEventListener('click', () => checkUrl(true));
++
+       // Fetch website metadata when page loads and when URL changes, unless we are editing an existing bookmark
+       if (!editedBookmarkId) {
+         checkUrl();
+-        urlInput.addEventListener('input', checkUrl);
++        urlInput.addEventListener('input', () => checkUrl());
+         titleInput.addEventListener('input', () => {
+           isTitleModified = true;
+         });
