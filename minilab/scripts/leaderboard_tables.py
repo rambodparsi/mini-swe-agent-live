@@ -57,12 +57,17 @@ def main(folder: Path = typer.Argument(..., help="Folder with one subfolder per 
 
     res_rows = [[t, *(status[n].get(t, "missing") for n in names), str(n_res[t])] for t in tasks]
     traj_rows = [[t, *(trajs[n].get(t, "") for n in names), str(sum(t in trajs[n] for n in names))] for t in tasks]
-    for file, rows, last in [("resolved_by_instance.csv", res_rows, "resolved_by"), ("trajectories_by_instance.csv", traj_rows, "with_trajectory")]:
+    for file, rows, last in [
+        ("resolved_by_instance.csv", res_rows, "resolved_by"),
+        ("trajectories_by_instance.csv", traj_rows, "with_trajectory"),
+    ]:
         with (folder / file).open("w", newline="") as f:
             csv.writer(f).writerows([["instance_id", *names, last], *rows])
 
     total = len(tasks)
-    res_summary = [["**resolved**", *(f"**{sum(v == 'resolved' for v in status[n].values())}/{total}**" for n in names), ""]]
+    res_summary = [
+        ["**resolved**", *(f"**{sum(v == 'resolved' for v in status[n].values())}/{total}**" for n in names), ""]
+    ]
     traj_summary = [["**with trajectory**", *(f"**{len(set(trajs[n]) & set(tasks))}/{total}**" for n in names), ""]]
     by_count = {k: sum(v == k for v in n_res.values()) for k in range(len(names) + 1)}
     doc = [
@@ -80,7 +85,10 @@ def main(folder: Path = typer.Argument(..., help="Folder with one subfolder per 
         + ", ".join(f"{k} of {len(names)}: {by_count[k]}" for k in sorted(by_count, reverse=True))
         + ".",
         "",
-        markdown(["instance_id", *names, "resolved by"], res_summary + [[r[0], *(SYMBOL[c] for c in r[1:-1]), r[-1]] for r in res_rows]),
+        markdown(
+            ["instance_id", *names, "resolved by"],
+            res_summary + [[r[0], *(SYMBOL[c] for c in r[1:-1]), r[-1]] for r in res_rows],
+        ),
         "",
         "## 2. Trajectory per task",
         "",
