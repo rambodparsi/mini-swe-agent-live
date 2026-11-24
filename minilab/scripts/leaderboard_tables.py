@@ -47,7 +47,14 @@ def markdown(header: list[str], rows: list[list[str]]) -> str:
 
 
 @app.command()
-def main(folder: Path = typer.Argument(..., help="Folder with one subfolder per submission")) -> None:
+def main(
+    folder: Path = typer.Argument(..., help="Folder with one subfolder per submission"),
+    pairs: list[str] = typer.Option(
+        ["tianxicode_deepseek-flash:ami-agent"],
+        "--pair",
+        help="A:B; lists tasks resolved by A but not B and vice versa",
+    ),
+) -> None:
     subs = sorted(d for d in folder.iterdir() if (d / "results" / "results.json").exists())
     status = {s.name: statuses(s) for s in subs}
     trajs = {s.name: trajectories(s) for s in subs}
@@ -97,22 +104,33 @@ def main(folder: Path = typer.Argument(..., help="Folder with one subfolder per 
         markdown(["instance_id", *names, "with trajectory"], traj_summary + traj_rows),
         "",
     ]
+    note = "Cells show each submission's outcome; `with trajectory` = number of submissions with a trajectory for the task."
+
+    def task_table(chosen: list[str]) -> str:
+        return markdown(
+            ["#", "instance_id", *names, "with trajectory"],
+            [
+                [str(i), t, *(SYMBOL[status[n][t]] for n in names), str(sum(t in trajs[n] for n in names))]
+                for i, t in enumerate(chosen, 1)
+            ],
+        )
+
     for number, title, k in [(3, "Resolved by all submissions", len(names)), (4, "Resolved by none", 0)]:
         chosen = [t for t in tasks if n_res[t] == k]
-        doc += [
-            f"## {number}. {title} ({len(chosen)} tasks)",
-            "",
-            "Cells show each submission's outcome; `with trajectory` = number of submissions with a trajectory for the task.",
-            "",
-            markdown(
-                ["#", "instance_id", *names, "with trajectory"],
-                [
-                    [str(i), t, *(SYMBOL[status[n][t]] for n in names), str(sum(t in trajs[n] for n in names))]
-                    for i, t in enumerate(chosen, 1)
-                ],
-            ),
-            "",
-        ]
+        doc += [f"## {number}. {title} ({len(chosen)} tasks)", "", note, "", task_table(chosen), ""]
+    for number, pair in enumerate(pairs, 5):
+        a, b = pair.split(":")
+        if not {a, b} <= set(names):
+            raise SystemExit(f"--pair {pair}: unknown submission; choose from {', '.join(names)}")
+        doc += [f"## {number}. {a} vs {b}", "", note + " Not resolved = failed, empty patch or error.", ""]
+        for part, (x, y) in zip("ab", [(a, b), (b, a)]):
+            chosen = [t for t in tasks if status[x].get(t) == "resolved" and status[y].get(t) != "resolved"]
+            doc += [
+                f"### {number}{part}. Resolved by {x}, not by {y} ({len(chosen)} tasks)",
+                "",
+                task_table(chosen),
+                "",
+            ]
     (folder / "TABLES.md").write_text("\n".join(doc))
     print(f"{len(tasks)} tasks, {len(names)} submissions → {folder}/TABLES.md")
 
