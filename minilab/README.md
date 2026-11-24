@@ -55,6 +55,7 @@ minilab/
 │   ├── download_dataset.py   fixed local copy of the dataset (data/, not version-controlled)
 │   ├── make_pilot.py         seeded pilot sample, spread over repositories
 │   ├── evaluate.sh           SWE-bench-Live evaluation of run folders → <run>/eval/
+│   ├── leaderboard_tables.py per-task tables of leaderboard submissions: resolved, trajectory available
 │   └── smoke.sh              dataset check → gold patches → agent → evaluation, on the first N instances
 └── tests/                    equivalence with plain mini, hooks, prompt sections, helper LLM, runner, check
 ```
