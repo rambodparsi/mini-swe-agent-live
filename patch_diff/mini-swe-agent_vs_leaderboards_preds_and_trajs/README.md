@@ -5,7 +5,7 @@ Copied from [SWE-bench-Live/submission](https://github.com/SWE-bench-Live/submis
 Files are unchanged; only the folder layout is ours: `<submission>/preds/preds.json`, `<submission>/results/results.json`
 (the submission's evaluation summary) and `<submission>/trajs/`.
 
-**[`TABLES.md`](TABLES.md)**: which submission resolved which task, and which has a trajectory for which task
+**[`TABLES.md`](TABLES.md)**: which submission resolved which task, which has a trajectory for which task, and the tasks resolved by all or by none of the submissions
 (also as `resolved_by_instance.csv` and `trajectories_by_instance.csv`). Rebuild with
 `python -m minilab.scripts.leaderboard_tables patch_diff/mini-swe-agent_vs_leaderboards_preds_and_trajs`.
 A task counts as resolved if it is in the submission's resolved list; otherwise it is empty (no patch), error,

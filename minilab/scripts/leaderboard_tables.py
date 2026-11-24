@@ -97,6 +97,32 @@ def main(folder: Path = typer.Argument(..., help="Folder with one subfolder per 
         markdown(["instance_id", *names, "with trajectory"], traj_summary + traj_rows),
         "",
     ]
+    for number, title, k, cells in [
+        (3, "Resolved by all submissions", len(names), False),
+        (4, "Resolved by none", 0, True),
+    ]:
+        chosen = [t for t in tasks if n_res[t] == k]
+        doc += [
+            f"## {number}. {title} ({len(chosen)} tasks)",
+            "",
+            ("Cells show each submission's outcome; " if cells else "")
+            + "`with trajectory` = number of submissions with a trajectory for the task.",
+            "",
+            markdown(
+                ["#", "instance_id", "repository", *(names if cells else []), "with trajectory"],
+                [
+                    [
+                        str(i),
+                        t,
+                        t.split("__")[0] + "/" + t.split("__")[1].rsplit("-", 1)[0],
+                        *([SYMBOL[status[n][t]] for n in names] if cells else []),
+                        str(sum(t in trajs[n] for n in names)),
+                    ]
+                    for i, t in enumerate(chosen, 1)
+                ],
+            ),
+            "",
+        ]
     (folder / "TABLES.md").write_text("\n".join(doc))
     print(f"{len(tasks)} tasks, {len(names)} submissions → {folder}/TABLES.md")
 

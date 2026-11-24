@@ -620,3 +620,132 @@ Cell = trajectory format (`folder` = one folder per task, otherwise the file typ
 | yt-dlp__yt-dlp-11880 | folder |  | json |  | 2 |
 | yt-dlp__yt-dlp-12684 | folder |  | json |  | 2 |
 | yt-dlp__yt-dlp-12714 | folder |  | json |  | 2 |
+
+## 3. Resolved by all submissions (102 tasks)
+
+`with trajectory` = number of submissions with a trajectory for the task.
+
+| # | instance_id | repository | with trajectory |
+|---|---|---|---|
+| 1 | beancount__beancount-931 | beancount/beancount | 2 |
+| 2 | beetbox__beets-5457 | beetbox/beets | 2 |
+| 3 | beetbox__beets-5495 | beetbox/beets | 2 |
+| 4 | beeware__briefcase-2085 | beeware/briefcase | 2 |
+| 5 | conan-io__conan-17102 | conan-io/conan | 2 |
+| 6 | conan-io__conan-17117 | conan-io/conan | 2 |
+| 7 | conan-io__conan-17123 | conan-io/conan | 2 |
+| 8 | conan-io__conan-17129 | conan-io/conan | 2 |
+| 9 | conan-io__conan-17183 | conan-io/conan | 2 |
+| 10 | conan-io__conan-17266 | conan-io/conan | 2 |
+| 11 | conan-io__conan-17292 | conan-io/conan | 2 |
+| 12 | conan-io__conan-17300 | conan-io/conan | 2 |
+| 13 | conan-io__conan-17301 | conan-io/conan | 2 |
+| 14 | conan-io__conan-17302 | conan-io/conan | 2 |
+| 15 | conan-io__conan-17326 | conan-io/conan | 1 |
+| 16 | conan-io__conan-17382 | conan-io/conan | 2 |
+| 17 | conan-io__conan-17408 | conan-io/conan | 2 |
+| 18 | conan-io__conan-17517 | conan-io/conan | 2 |
+| 19 | conan-io__conan-17520 | conan-io/conan | 2 |
+| 20 | conan-io__conan-17532 | conan-io/conan | 2 |
+| 21 | conan-io__conan-17917 | conan-io/conan | 2 |
+| 22 | conan-io__conan-17923 | conan-io/conan | 2 |
+| 23 | conan-io__conan-18028 | conan-io/conan | 2 |
+| 24 | conan-io__conan-18037 | conan-io/conan | 2 |
+| 25 | cyclotruc__gitingest-94 | cyclotruc/gitingest | 2 |
+| 26 | deepset-ai__haystack-8609 | deepset-ai/haystack | 2 |
+| 27 | deepset-ai__haystack-8725 | deepset-ai/haystack | 2 |
+| 28 | deepset-ai__haystack-8799 | deepset-ai/haystack | 2 |
+| 29 | deepset-ai__haystack-8969 | deepset-ai/haystack | 2 |
+| 30 | deepset-ai__haystack-8973 | deepset-ai/haystack | 2 |
+| 31 | deepset-ai__haystack-8992 | deepset-ai/haystack | 2 |
+| 32 | deepset-ai__haystack-8997 | deepset-ai/haystack | 2 |
+| 33 | delgan__loguru-1297 | delgan/loguru | 2 |
+| 34 | delgan__loguru-1306 | delgan/loguru | 2 |
+| 35 | dynaconf__dynaconf-1225 | dynaconf/dynaconf | 2 |
+| 36 | dynaconf__dynaconf-1241 | dynaconf/dynaconf | 2 |
+| 37 | feast-dev__feast-5036 | feast-dev/feast | 2 |
+| 38 | flexget__flexget-4244 | flexget/flexget | 2 |
+| 39 | fonttools__fonttools-3682 | fonttools/fonttools | 2 |
+| 40 | icloud-photos-downloader__icloud_photos_downloader-1060 | icloud-photos-downloader/icloud_photos_downloader | 2 |
+| 41 | instructlab__instructlab-2548 | instructlab/instructlab | 2 |
+| 42 | ipython__ipython-14695 | ipython/ipython | 2 |
+| 43 | ipython__ipython-14822 | ipython/ipython | 2 |
+| 44 | ipython__ipython-14838 | ipython/ipython | 2 |
+| 45 | iterative__dvc-10711 | iterative/dvc | 2 |
+| 46 | joke2k__faker-2155 | joke2k/faker | 2 |
+| 47 | joke2k__faker-2173 | joke2k/faker | 2 |
+| 48 | joke2k__faker-2190 | joke2k/faker | 2 |
+| 49 | jupyterlab__jupyter-ai-1294 | jupyterlab/jupyter-ai | 2 |
+| 50 | koxudaxi__datamodel-code-generator-2259 | koxudaxi/datamodel-code-generator | 2 |
+| 51 | koxudaxi__datamodel-code-generator-2349 | koxudaxi/datamodel-code-generator | 2 |
+| 52 | kozea__weasyprint-2300 | kozea/weasyprint | 2 |
+| 53 | kozea__weasyprint-2303 | kozea/weasyprint | 2 |
+| 54 | kozea__weasyprint-2398 | kozea/weasyprint | 2 |
+| 55 | kozea__weasyprint-2405 | kozea/weasyprint | 2 |
+| 56 | pallets__flask-5626 | pallets/flask | 2 |
+| 57 | pallets__flask-5637 | pallets/flask | 2 |
+| 58 | patroni__patroni-3198 | patroni/patroni | 2 |
+| 59 | pdm-project__pdm-3255 | pdm-project/pdm | 2 |
+| 60 | pdm-project__pdm-3420 | pdm-project/pdm | 2 |
+| 61 | projectmesa__mesa-2394 | projectmesa/mesa | 3 |
+| 62 | projectmesa__mesa-2418 | projectmesa/mesa | 2 |
+| 63 | projectmesa__mesa-2632 | projectmesa/mesa | 2 |
+| 64 | pvlib__pvlib-python-2249 | pvlib/pvlib-python | 3 |
+| 65 | pvlib__pvlib-python-2286 | pvlib/pvlib-python | 3 |
+| 66 | pvlib__pvlib-python-2291 | pvlib/pvlib-python | 2 |
+| 67 | pvlib__pvlib-python-2341 | pvlib/pvlib-python | 2 |
+| 68 | pvlib__pvlib-python-2393 | pvlib/pvlib-python | 2 |
+| 69 | pvlib__pvlib-python-2400 | pvlib/pvlib-python | 2 |
+| 70 | pybamm-team__pybamm-4644 | pybamm-team/pybamm | 2 |
+| 71 | pybamm-team__pybamm-4865 | pybamm-team/pybamm | 2 |
+| 72 | pydata__xarray-9974 | pydata/xarray | 2 |
+| 73 | pylint-dev__pylint-10089 | pylint-dev/pylint | 2 |
+| 74 | pypa__twine-1225 | pypa/twine | 2 |
+| 75 | python-babel__babel-1141 | python-babel/babel | 4 |
+| 76 | python-babel__babel-1163 | python-babel/babel | 2 |
+| 77 | python-babel__babel-1179 | python-babel/babel | 2 |
+| 78 | python-babel__babel-1194 | python-babel/babel | 2 |
+| 79 | python-control__python-control-1111 | python-control/python-control | 2 |
+| 80 | pytorch__torchtune-1806 | pytorch/torchtune | 3 |
+| 81 | reflex-dev__reflex-4087 | reflex-dev/reflex | 2 |
+| 82 | reflex-dev__reflex-4266 | reflex-dev/reflex | 2 |
+| 83 | reflex-dev__reflex-4510 | reflex-dev/reflex | 2 |
+| 84 | run-llama__llama_deploy-330 | run-llama/llama_deploy | 2 |
+| 85 | run-llama__llama_deploy-356 | run-llama/llama_deploy | 2 |
+| 86 | run-llama__llama_deploy-384 | run-llama/llama_deploy | 2 |
+| 87 | shapely__shapely-2224 | shapely/shapely | 2 |
+| 88 | shapely__shapely-2226 | shapely/shapely | 2 |
+| 89 | sissbruecker__linkding-989 | sissbruecker/linkding | 2 |
+| 90 | sphinx-doc__sphinx-13127 | sphinx-doc/sphinx | 2 |
+| 91 | sphinx-doc__sphinx-13253 | sphinx-doc/sphinx | 2 |
+| 92 | stanfordnlp__dspy-1651 | stanfordnlp/dspy | 2 |
+| 93 | streamlink__streamlink-6242 | streamlink/streamlink | 3 |
+| 94 | streamlink__streamlink-6361 | streamlink/streamlink | 2 |
+| 95 | streamlink__streamlink-6439 | streamlink/streamlink | 2 |
+| 96 | sympy__sympy-27462 | sympy/sympy | 2 |
+| 97 | wemake-services__wemake-python-styleguide-3117 | wemake-services/wemake-python-styleguide | 2 |
+| 98 | wireservice__csvkit-1274 | wireservice/csvkit | 2 |
+| 99 | wireservice__csvkit-1281 | wireservice/csvkit | 2 |
+| 100 | yt-dlp__yt-dlp-11425 | yt-dlp/yt-dlp | 2 |
+| 101 | yt-dlp__yt-dlp-11880 | yt-dlp/yt-dlp | 2 |
+| 102 | yt-dlp__yt-dlp-12714 | yt-dlp/yt-dlp | 2 |
+
+## 4. Resolved by none (13 tasks)
+
+Cells show each submission's outcome; `with trajectory` = number of submissions with a trajectory for the task.
+
+| # | instance_id | repository | tianxicode_deepseek-flash | sapient-slingshot-agent_v3.4.0_gpt-5.6-sol | ami-agent | agav_gpt-5.5 | with trajectory |
+|---|---|---|---|---|---|---|---|
+| 1 | aws-cloudformation__cfn-lint-3798 | aws-cloudformation/cfn-lint | ❌ | ❌ | ❌ | ❌ | 3 |
+| 2 | aws-cloudformation__cfn-lint-3855 | aws-cloudformation/cfn-lint | ❌ | ❌ | ❌ | ❌ | 2 |
+| 3 | aws-cloudformation__cfn-lint-3866 | aws-cloudformation/cfn-lint | ❌ | ❌ | ❌ | ❌ | 2 |
+| 4 | bridgecrewio__checkov-6895 | bridgecrewio/checkov | ❌ | ❌ | ❌ | ❌ | 2 |
+| 5 | cyclotruc__gitingest-134 | cyclotruc/gitingest | ❌ | ❌ | ❌ | ❌ | 2 |
+| 6 | huggingface__smolagents-731 | huggingface/smolagents | ❌ | ❌ | ❌ | ❌ | 2 |
+| 7 | joke2k__faker-2142 | joke2k/faker | ❌ | ❌ | ❌ | ❌ | 2 |
+| 8 | kedro-org__kedro-4580 | kedro-org/kedro | ❌ | ❌ | ❌ | ❌ | 2 |
+| 9 | matplotlib__matplotlib-29781 | matplotlib/matplotlib | ❌ | ❌ | ❌ | ❌ | 2 |
+| 10 | pypsa__pypsa-1195 | pypsa/pypsa | ❌ | ❌ | ❌ | ❌ | 2 |
+| 11 | python-telegram-bot__python-telegram-bot-4617 | python-telegram-bot/python-telegram-bot | ❌ | ❌ | ❌ | ❌ | 2 |
+| 12 | python-telegram-bot__python-telegram-bot-4673 | python-telegram-bot/python-telegram-bot | ❌ | ❌ | ❌ | ❌ | 2 |
+| 13 | urllib3__urllib3-3527 | urllib3/urllib3 | ❌ | ❌ | ❌ | ❌ | 2 |
